@@ -176,17 +176,6 @@ export default function TeamForm({
                 defaultChecked
               />
             ))}
-            {leads.length === 0 && (
-              // This input exists only to trigger HTML5 validation if no leads are selected
-              <input
-                type="checkbox"
-                name="teamleadId"
-                style={{ opacity: 0, position: 'absolute' }}
-                value=""
-                required
-                onInvalid={(e) => e.currentTarget.setCustomValidity(t('teamLeadRequired'))}
-              />
-            )}
             <Box mt="1">
               <Button variant="soft" type="button" onClick={() => setPickerOpen(true)}>
                 <PlusIcon />

@@ -7,7 +7,6 @@ import { checkAuthorisation, currentUser, getCurrentEventOrRedirect } from '@/se
 import { inTransaction } from '@/db';
 import TeamForm from '@/ui/team-form';
 import { validateExistingTeam } from '@/validator/team-validator';
-import { validateUserIds } from '@/validator/user-validator';
 import { deleteTeam, getTeamById, updateTeam } from '@/service/team-service';
 import { usersToVolunteers } from '@/lib/volunteer';
 import { getPermissionsProfile } from '@/utils/permissions';
@@ -53,7 +52,12 @@ export default async function UpdateTeam({ params, searchParams }: PageProps<'/u
     await checkAuthorisation(authorisedRoles);
 
     const roleToAdd: UserRole = { type: 'team-lead', eventId: newTeam.eventId, teamId: newTeam.id };
-    const newTeamleads = new Set(validateUserIds(data, 'teamleadId'));
+    const newTeamleads = new Set(
+      data
+        .getAll('teamleadId')
+        .map((value) => value.toString().trim())
+        .filter((id) => id.length > 0)
+    );
     const existingTeamleads = new Set((await getUsersWithRole(roleToAdd)).map(({ id }) => id));
     const toRemove = existingTeamleads.difference(newTeamleads);
     const toAdd = newTeamleads.difference(existingTeamleads);
