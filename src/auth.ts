@@ -25,11 +25,72 @@ import { cookies } from 'next/headers';
 export const AUTH_MODE = (process.env.AUTH_MODE ?? 'oauth') as 'oauth' | 'credentials';
 
 const useOAuth = AUTH_MODE === 'oauth';
+const oauthAdminEmails = Array.from(
+  new Set(
+    (process.env.OAUTH_ADMIN_EMAILS ?? process.env.OAUTH_ADMIN_EMAIL ?? '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  )
+);
 const isOAuthConfigComplete =
   process.env.OAUTH_CLIENT_ID &&
   process.env.OAUTH_PROVIDER_ID &&
   process.env.OAUTH_CLIENT_SECRET &&
   process.env.OAUTH_DISCOVERY_URL;
+
+const isConfiguredOauthAdmin = (email: string | undefined | null): boolean => {
+  const normalised = email?.trim().toLowerCase();
+  if (!normalised) {
+    return false;
+  }
+  return oauthAdminEmails.includes(normalised);
+};
+
+const shouldGrantOAuthAdminForPath = (path: string): boolean => {
+  return path === '/sign-in/oauth2' || path.startsWith('/oauth2/callback/');
+};
+
+const grantOAuthAdminToUserIfConfigured = async (
+  user: { id?: string; email?: string | null } | undefined,
+  source: string
+) => {
+  if (!user?.id || !isConfiguredOauthAdmin(user.email)) {
+    return;
+  }
+  await addRoleToUsers({ type: 'admin' }, [user.id]);
+  console.info('[auth] Granted admin role to configured OAuth user (%s)', source);
+};
+
+const seedConfiguredOauthAdminsOnStartup = async () => {
+  if (!useOAuth || oauthAdminEmails.length === 0) {
+    return;
+  }
+
+  try {
+    const result = await db.query(
+      `
+      SELECT id
+      FROM "user"
+      WHERE LOWER(email) = ANY($1::text[])
+      AND "deletedAt" IS NULL
+      `,
+      [oauthAdminEmails]
+    );
+
+    const userIds = result.rows.map((row) => row.id as string);
+    if (userIds.length === 0) {
+      return;
+    }
+
+    await addRoleToUsers({ type: 'admin' }, userIds);
+    console.info('[auth] Seeded admin role for %d configured OAuth user(s)', userIds.length);
+  } catch (error) {
+    console.error('[auth] Failed to seed configured OAuth admin users', error);
+  }
+};
+
+void seedConfiguredOauthAdminsOnStartup();
 
 const plugins = [
   ...(useOAuth && isOAuthConfigComplete
@@ -50,6 +111,17 @@ const plugins = [
 ];
 
 const afterHook = createAuthMiddleware(async (ctx) => {
+  if (useOAuth && shouldGrantOAuthAdminForPath(ctx.path)) {
+    const returned = ctx.context.returned as
+      | { user?: { id?: string; email?: string | null } }
+      | Error
+      | undefined;
+
+    if (returned && !(returned instanceof Error) && returned.user) {
+      await grantOAuthAdminToUserIfConfigured(returned.user, ctx.path);
+    }
+  }
+
   if (ctx.path.startsWith('/sign-up')) {
     await inTransaction(async (client) => {
       if ((await getRoleCount('admin', client)) === 0) {

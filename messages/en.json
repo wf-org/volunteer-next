@@ -6,6 +6,12 @@
   },
   "DashboardPage": {
     "yourDashboard": "Your dashboard",
+    "ticketStatusTitle": "Ticket status",
+    "ticketStatusHasTicket": "You have a valid ticket for this event.",
+    "ticketStatusNoTicket": "You do not currently have a valid ticket for this event.",
+    "ticketStatusChecksDisabled": "Ticket validation is currently disabled.",
+    "minimumHoursTitle": "Minimum volunteer hours requirement",
+    "minimumHoursDescription": "You have signed up for {current} of {required} required hours. You still need {remaining} more hour(s).",
     "your": "Your",
     "shifts": "Shifts",
     "totalHours": "Total Hours",
@@ -35,6 +41,8 @@
     "title": "All teams",
     "description": "Select a team to view and sign up for shifts.",
     "descriptionAdmin": "Select a team to manage its shifts or create a shift directly.",
+    "ticketRequiredBannerTitle": "Valid ticket required",
+    "ticketRequiredBannerDescription": "You need a valid event ticket to sign up for shifts.",
     "createTeam": "Add team",
     "edit": "Edit Team: {teamName}"
   },
@@ -56,7 +64,9 @@
     },
     "InfoTab": {},
     "ShiftsTab": {
-      "title": "Shifts"
+      "title": "Shifts",
+      "ticketRequiredBannerTitle": "Valid ticket required",
+      "ticketRequiredBannerDescription": "You need a valid event ticket to sign up for shifts."
     },
     "VolunteersTab": {
       "title": "Volunteers",
@@ -237,6 +247,9 @@
     "startDateDescription": "When the event begins.",
     "endDate": "End Date",
     "endDateDescription": "When the event ends.",
+    "requiredVolunteerHours": "Required Volunteer Hours",
+    "requiredVolunteerHoursDescription": "Minimum hours each volunteer is expected to complete for this event.",
+    "requiredVolunteerHoursPlaceholder": "0",
     "eventOrganiser": "Event Organiser",
     "eventOrganiserDescription": "The main point of contact for the event. This person will have admin access to the event and all its teams.",
     "eventLogo": "Event Logo",
@@ -385,6 +398,9 @@
     "title": "Shift Title",
     "titleDescription": "This will be the shift's official title.",
     "titlePlaceholder": "Title",
+    "description": "Description",
+    "descriptionDescription": "Optional details volunteers should know before signing up.",
+    "descriptionPlaceholder": "Describe responsibilities, location, or notes.",
     "shiftDay": "Shift Date",
     "shiftDayDescription": "Date when the shift starts",
     "shiftTime": "Shift Start Time",

@@ -8,6 +8,7 @@ describe('Event Validator', () => {
       formData.set('slug', 'test-event');
       formData.set('startDate', '2025-12-01');
       formData.set('endDate', '2025-12-05');
+      formData.set('requiredVolunteerHours', '12');
 
       const result = validateNewEvent(formData);
 
@@ -15,7 +16,8 @@ describe('Event Validator', () => {
         name: 'Test Event',
         slug: 'test-event',
         startDate: new Date('2025-12-01'),
-        endDate: new Date('2025-12-05')
+        endDate: new Date('2025-12-05'),
+        requiredVolunteerHours: 12
       });
     });
 
@@ -74,6 +76,31 @@ describe('Event Validator', () => {
 
       expect(() => validateNewEvent(formData)).toThrow('End date cannot be before start date');
     });
+
+    it('defaults requiredVolunteerHours to 0 when not provided', () => {
+      const formData = new FormData();
+      formData.set('name', 'Test Event');
+      formData.set('slug', 'test-event');
+      formData.set('startDate', '2025-12-01');
+      formData.set('endDate', '2025-12-05');
+
+      const result = validateNewEvent(formData);
+
+      expect(result.requiredVolunteerHours).toBe(0);
+    });
+
+    it('throws an error if requiredVolunteerHours is invalid', () => {
+      const formData = new FormData();
+      formData.set('name', 'Test Event');
+      formData.set('slug', 'test-event');
+      formData.set('startDate', '2025-12-01');
+      formData.set('endDate', '2025-12-05');
+      formData.set('requiredVolunteerHours', '-2');
+
+      expect(() => validateNewEvent(formData)).toThrow(
+        'Required volunteer hours must be a non-negative integer'
+      );
+    });
   });
 
   describe('validateExistingEvent', () => {
@@ -84,6 +111,7 @@ describe('Event Validator', () => {
       formData.set('slug', 'test-event');
       formData.set('startDate', '2025-12-01');
       formData.set('endDate', '2025-12-05');
+      formData.set('requiredVolunteerHours', '8');
 
       const result = validateExistingEvent(formData);
 
@@ -92,7 +120,8 @@ describe('Event Validator', () => {
         name: 'Test Event',
         slug: 'test-event',
         startDate: new Date('2025-12-01'),
-        endDate: new Date('2025-12-05')
+        endDate: new Date('2025-12-05'),
+        requiredVolunteerHours: 8
       });
     });
 

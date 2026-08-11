@@ -120,6 +120,50 @@ describe('ShiftDialog', () => {
     });
   });
 
+  it('prevents duplicate submissions on rapid double click', async () => {
+    let resolveSubmit: (() => void) | undefined;
+    const mockOnSubmit = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSubmit = resolve;
+        })
+    );
+
+    const { getByText, getByPlaceholderText, getByLabelText } = render(
+      <ShiftDialog
+        startDate={new Date()}
+        teamId="team-1"
+        qualifications={[]}
+        creating={true}
+        onSubmit={mockOnSubmit}
+      />
+    );
+
+    fireEvent.change(getByPlaceholderText('titlePlaceholder'), {
+      target: { value: 'New Shift' }
+    });
+    fireEvent.change(getByLabelText('length'), {
+      target: { value: '4' }
+    });
+    fireEvent.change(getByLabelText('minVolunteers'), {
+      target: { value: '2' }
+    });
+    fireEvent.change(getByLabelText('maxVolunteers'), {
+      target: { value: '5' }
+    });
+
+    const saveButton = getByText('save');
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    expect(mockOnSubmit).toHaveBeenCalledTimes(1);
+
+    resolveSubmit?.();
+    await waitFor(() => {
+      expect(saveButton).not.toBeDisabled();
+    });
+  });
+
   it('renders qualifications as requirement checkboxes', () => {
     const qualifications: QualificationInfo[] = [
       { id: 'qualification-1', eventId: 'event-1', name: 'CPR Certified', errorMessage: 'error' },

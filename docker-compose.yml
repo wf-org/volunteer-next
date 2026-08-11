@@ -5,20 +5,26 @@
 services:
   # Main Next.js application service, for production only
   volunteer-next:
+    networks:
+      - volunteer-next
     build:
       context: .
       dockerfile: Dockerfile
-
+    env_file:
+      - .env.local
     image: volunteer-next:latest
     container_name: volunteer-next
     environment:
       NODE_ENV: production
-      PORT: '3000'
+      PORT: "3000"
     ports:
-      - '3000:3000'
+      - "3000:3000"
     restart: unless-stopped
     volumes:
       - uploads:/app/uploads
 
 volumes:
   uploads:
+
+networks:
+  volunteer-next:

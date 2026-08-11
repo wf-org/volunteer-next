@@ -1,7 +1,8 @@
 import metadata from '@/i18n/metadata';
-import { Heading, Flex, Button, Text, IconButton } from '@radix-ui/themes';
+import { Heading, Flex, Button, Text, IconButton, Card } from '@radix-ui/themes';
 import { getTranslations } from 'next-intl/server';
 import { Pencil2Icon, PlusIcon } from '@radix-ui/react-icons';
+import { hasValidPretixTicketForEvent, isPretixTicketCheckEnabled } from '@/lib/pretix-ticket';
 import {
   checkAuthorisation,
   currentUser,
@@ -31,13 +32,17 @@ export default async function TeamsDashboard({ searchParams }: PageProps<'/team'
   const event = await getCurrentEventOrRedirect();
 
   const editorRoles: UserRole[] = [{ type: 'admin' }, { type: 'organiser', eventId: event.id }];
+  const user = (await currentUser())!;
+  const ticketChecksEnabled = isPretixTicketCheckEnabled();
+  const userHasValidTicket =
+    !ticketChecksEnabled || (await hasValidPretixTicketForEvent(user.email, event.slug));
 
   const filters = recordToTeamFilters(await searchParams);
   const teams = await getFilteredTeamsForEvent(event.id, filters);
   const shifts = await getShiftsForEvent(event.id);
   const shiftVolunteers = await getVolunteersForShifts(
     shifts.map((shift) => shift.id),
-    getPermissionsProfile(await currentUser()),
+    getPermissionsProfile(user),
     event.id
   );
   const hasEventAccess = await checkAuthorisation(editorRoles, true);
@@ -81,6 +86,21 @@ export default async function TeamsDashboard({ searchParams }: PageProps<'/team'
         <Heading as="h2">{t('title')}</Heading>
         <Text>{t(isEditable ? 'descriptionAdmin' : 'description')}</Text>
       </Flex>
+      {ticketChecksEnabled && !userHasValidTicket && (
+        <Card
+          style={
+            {
+              '--card-background-color': 'var(--amber-3)',
+              borderColor: 'var(--amber-8)'
+            } as React.CSSProperties
+          }
+        >
+          <Flex direction="column" gap="1">
+            <Text weight="bold">{t('ticketRequiredBannerTitle')}</Text>
+            <Text>{t('ticketRequiredBannerDescription')}</Text>
+          </Flex>
+        </Card>
+      )}
       {isEditable && (
         <Flex gap="2">
           {hasEventAccess && (

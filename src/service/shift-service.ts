@@ -5,6 +5,7 @@
  * - id: UUID (primary key)
  * - teamId: UUID (foreign key to team)
  * - title: string
+ * - description: string
  * - eventDay: smallint (day of event, e.g. 0 for first day)
  * - startTime: time (without timezone)
  * - durationHours: smallint
@@ -34,6 +35,7 @@ const rowToShift = (row: any): ShiftInfo => ({
   id: row.id,
   teamId: row.teamId,
   title: row.title,
+  description: row.description ?? '',
   eventDay: row.eventDay,
   startTime: stringToTime(row.startTime),
   durationHours: row.durationHours,
@@ -68,6 +70,7 @@ const SHIFT_QUERY = `
     s."id",
     s."teamId", 
     s."title", 
+    s."description",
     s."eventDay", 
     s."startTime", 
     s."durationHours",
@@ -166,6 +169,7 @@ export const getFilteredShiftsForEvent = cache(
     if (searchQuery) {
       params.push(`%${searchQuery}%`);
       whereClauses.push(`s."title" ILIKE $${params.length}`);
+      whereClauses.push(`s."description" ILIKE $${params.length}`);
     }
 
     const result = await pool.query(
@@ -220,6 +224,42 @@ const insertShiftRequirements = async (
   }
 };
 
+const getEventIdForTeam = async (
+  db: PoolClient | typeof pool,
+  teamId: TeamId
+): Promise<EventId | null> => {
+  const result = await db.query(
+    `
+    SELECT "eventId"
+    FROM team
+    WHERE id = $1
+    `,
+    [teamId]
+  );
+  return result.rows[0]?.eventId ?? null;
+};
+
+const syncShiftDescriptionsByTitleInEvent = async (
+  db: PoolClient | typeof pool,
+  eventId: EventId,
+  title: string,
+  description: string
+): Promise<void> => {
+  await db.query(
+    `
+    UPDATE shift s
+    SET
+      "description" = $3,
+      "updatedAt" = NOW()
+    FROM team t
+    WHERE s."teamId" = t.id
+      AND t."eventId" = $1
+      AND s."title" = $2
+    `,
+    [eventId, title, description]
+  );
+};
+
 /**
  * Creates a new shift in the database.
  * @param shift - The shift data, excluding the ID.
@@ -243,17 +283,19 @@ export const createShift = async (
       INSERT INTO shift (
         "teamId",
         "title",
+        "description",
         "eventDay",
         "startTime",
         "durationHours",
         "minVolunteers",
         "maxVolunteers",
         "isActive"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING 
         "id",
         "teamId",
         "title",
+        "description",
         "eventDay",
         "startTime",
         "durationHours",
@@ -264,6 +306,7 @@ export const createShift = async (
       [
         shift.teamId,
         shift.title,
+        shift.description ?? '',
         shift.eventDay,
         shift.startTime,
         shift.durationHours,
@@ -277,6 +320,16 @@ export const createShift = async (
 
     await insertShiftRequirements(db, newShift.id, shift.requirements);
     newShift.requirements = shift.requirements ?? [];
+
+    const eventId = await getEventIdForTeam(db, shift.teamId);
+    if (eventId) {
+      await syncShiftDescriptionsByTitleInEvent(
+        db,
+        eventId,
+        shift.title,
+        shift.description ?? ''
+      );
+    }
 
     if (useTransaction) {
       await db.query('COMMIT');
@@ -308,22 +361,34 @@ export const updateShift = async (shift: ShiftInfo, client?: PoolClient): Promis
   }
 
   try {
+    const previousShiftResult = await db.query(
+      `
+      SELECT "teamId", "title"
+      FROM shift
+      WHERE id = $1
+      `,
+      [shift.id]
+    );
+    const previousShift = previousShiftResult.rows[0];
+
     const result = await db.query(
       `
       UPDATE shift SET 
         "title" = $2,
-        "eventDay" = $3,
-        "startTime" = $4,
-        "durationHours" = $5,
-        "minVolunteers" = $6,
-        "maxVolunteers" = $7,
-        "isActive" = $8,
+        "description" = $3,
+        "eventDay" = $4,
+        "startTime" = $5,
+        "durationHours" = $6,
+        "minVolunteers" = $7,
+        "maxVolunteers" = $8,
+        "isActive" = $9,
         "updatedAt" = NOW()
       WHERE id = $1
       RETURNING
         "id",
         "teamId",
         "title",
+        "description",
         "eventDay",
         "startTime",
         "durationHours",
@@ -334,6 +399,7 @@ export const updateShift = async (shift: ShiftInfo, client?: PoolClient): Promis
       [
         shift.id,
         shift.title,
+        shift.description ?? '',
         shift.eventDay,
         shift.startTime,
         shift.durationHours,
@@ -356,6 +422,42 @@ export const updateShift = async (shift: ShiftInfo, client?: PoolClient): Promis
     await insertShiftRequirements(db, updatedShift.id, shift.requirements);
 
     updatedShift.requirements = shift.requirements ?? [];
+
+    const eventId = await getEventIdForTeam(db, updatedShift.teamId);
+    if (eventId) {
+      await syncShiftDescriptionsByTitleInEvent(
+        db,
+        eventId,
+        shift.title,
+        shift.description ?? ''
+      );
+
+      // If the title changed, keep the old title group synchronized as well.
+      if (previousShift?.title && previousShift.title !== shift.title) {
+        const previousTitleDescriptionResult = await db.query(
+          `
+          SELECT s."description"
+          FROM shift s
+          JOIN team t ON s."teamId" = t.id
+          WHERE t."eventId" = $1
+            AND s."title" = $2
+          ORDER BY s."updatedAt" DESC
+          LIMIT 1
+          `,
+          [eventId, previousShift.title]
+        );
+
+        const previousTitleDescription = previousTitleDescriptionResult.rows[0]?.description;
+        if (typeof previousTitleDescription === 'string') {
+          await syncShiftDescriptionsByTitleInEvent(
+            db,
+            eventId,
+            previousShift.title,
+            previousTitleDescription
+          );
+        }
+      }
+    }
 
     if (useTransaction) {
       await db.query('COMMIT');
@@ -523,6 +625,7 @@ export const getShiftsForVolunteers = cache(
       s."id",
       s."teamId", 
       s."title", 
+      s."description",
       s."eventDay", 
       s."startTime", 
       s."durationHours",

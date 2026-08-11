@@ -3,6 +3,7 @@ import { auth } from './auth';
 import { headers } from 'next/headers';
 import { getUser } from './service/user-service';
 import { getEventsById } from './service/event-service';
+import { hasValidPretixTicketForEvent } from './lib/pretix-ticket';
 import {
   currentUser,
   checkAuthorisation,
@@ -41,19 +42,25 @@ jest.mock('./service/event-service', () => ({
   getEventsById: jest.fn()
 }));
 
+jest.mock('./lib/pretix-ticket', () => ({
+  hasValidPretixTicketForEvent: jest.fn()
+}));
+
 const mockGetSession = auth.api.getSession as jest.MockedFunction<typeof auth.api.getSession>;
 const mockHeaders = headers as jest.MockedFunction<typeof headers>;
 const mockRedirect = redirect as jest.MockedFunction<typeof redirect>;
 const mockUnauthorized = unauthorized as jest.MockedFunction<typeof unauthorized>;
 const mockGetUser = getUser as jest.MockedFunction<typeof getUser>;
 const mockGetEventsById = getEventsById as jest.MockedFunction<typeof getEventsById>;
+const mockHasValidPretixTicketForEvent =
+  hasValidPretixTicketForEvent as jest.MockedFunction<typeof hasValidPretixTicketForEvent>;
 
 /**
  * Helper: prime the mocks so that the next call to currentUser() resolves to
  * the given user (or null). currentUser calls headers() + getSession() + getUser(),
  * so all three need to be set up together.
  */
-const mockUserAs = (user: { roles: { type: string }[] } | null) => {
+const mockUserAs = (user: { roles: { type: string }[]; email?: string } | null) => {
   if (user === null) {
     mockGetSession.mockResolvedValueOnce(null);
   } else {
@@ -111,6 +118,9 @@ describe('currentUser', () => {
 describe('checkAuthorisation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockHasValidPretixTicketForEvent.mockResolvedValue(true);
+    mockHeaders.mockResolvedValue(new Headers());
+    mockGetEventsById.mockResolvedValue([] as never);
   });
   it('should redirect if user is not logged in', async () => {
     mockUserAs(null);
@@ -131,11 +141,52 @@ describe('checkAuthorisation', () => {
   });
 
   it('should return true if user has an accepted role', async () => {
-    mockUserAs({ roles: [{ type: 'admin' }] });
+    mockUserAs({ roles: [{ type: 'admin' }], email: 'admin@example.org' });
 
     const result = await checkAuthorisation([{ type: 'admin' }]);
 
     expect(result).toBe(true);
+  });
+
+  it('should redirect to no-events when admin ticket check fails for selected event', async () => {
+    mockUserAs({ roles: [{ type: 'admin' }], email: 'admin@example.org' });
+    mockHeaders.mockResolvedValue(new Headers({ 'x-event-id': 'event-id' }));
+    mockGetEventsById.mockResolvedValueOnce([
+      {
+        id: 'event-id',
+        slug: 'my-event'
+      }
+    ] as never);
+    mockHasValidPretixTicketForEvent.mockResolvedValueOnce(false);
+    mockRedirect.mockImplementationOnce(() => {
+      throw new Error('Redirected');
+    });
+
+    await expect(checkAuthorisation([{ type: 'admin' }])).rejects.toThrow('Redirected');
+    expect(mockRedirect).toHaveBeenCalledWith('/no-events');
+    expect(mockHasValidPretixTicketForEvent).toHaveBeenCalledWith('admin@example.org', 'my-event');
+  });
+
+  it('should redirect to no-events when ticket check fails for selected event', async () => {
+    mockUserAs({ roles: [], email: 'volunteer@example.org' });
+    mockHeaders.mockResolvedValue(new Headers({ 'x-event-id': 'event-id' }));
+    mockGetEventsById.mockResolvedValueOnce([
+      {
+        id: 'event-id',
+        slug: 'my-event'
+      }
+    ] as never);
+    mockHasValidPretixTicketForEvent.mockResolvedValueOnce(false);
+    mockRedirect.mockImplementationOnce(() => {
+      throw new Error('Redirected');
+    });
+
+    await expect(checkAuthorisation()).rejects.toThrow('Redirected');
+    expect(mockRedirect).toHaveBeenCalledWith('/no-events');
+    expect(mockHasValidPretixTicketForEvent).toHaveBeenCalledWith(
+      'volunteer@example.org',
+      'my-event'
+    );
   });
 
   it('should call unauthorized if user lacks accepted roles and checkOnly is false', async () => {

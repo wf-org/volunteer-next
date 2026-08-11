@@ -1,10 +1,9 @@
 import metadata from '@/i18n/metadata';
 import { Box, Button, Card, Flex, Heading, Link, Text } from '@radix-ui/themes';
 import { getTranslations } from 'next-intl/server';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import NextLink from 'next/link';
 import {
-  checkAuthorisation,
   currentUser,
   getCurrentEvent,
   getCurrentEventOrRedirect,
@@ -19,6 +18,7 @@ import { getPermissionsProfile } from '@/utils/permissions';
 import { ArrowRightIcon } from '@radix-ui/react-icons';
 import TeamCard from '@/ui/team-card';
 import { getQualificationsForEvent } from '@/service/qualification-service';
+import { hasValidPretixTicketForEvent, isPretixTicketCheckEnabled } from '@/lib/pretix-ticket';
 
 const PAGE_KEY = 'DashboardPage';
 
@@ -32,15 +32,28 @@ export const generateMetadata = metadata(PAGE_KEY, {
 export default async function DashboardPage() {
   const t = await getTranslations(PAGE_KEY);
   const event = await getCurrentEventOrRedirect();
-  await checkAuthorisation();
 
   if (!event) {
     notFound();
   }
-  const user = (await currentUser())!; // checkAuthorisation ensures that this is not null
+  const user = await currentUser();
+  if (!user) {
+    redirect('/');
+  }
+
+  const ticketChecksEnabled = isPretixTicketCheckEnabled();
+  const hasTicket =
+    !ticketChecksEnabled ? true : await hasValidPretixTicketForEvent(user.email, event.slug);
+
   const permissionsProfile = getPermissionsProfile(user);
   const shifts = await getShiftsForVolunteer(event.id, user.id);
   const totalHours = shifts.reduce((sum, shift) => sum + shift.durationHours, 0);
+  const requiredVolunteerHours = event.requiredVolunteerHours ?? 0;
+  const minimumHoursEnabled = Number.isFinite(requiredVolunteerHours) && requiredVolunteerHours > 0;
+  const minimumHoursRemaining = minimumHoursEnabled
+    ? Math.max(0, requiredVolunteerHours - totalHours)
+    : 0;
+  const isBelowMinimumHours = minimumHoursEnabled && minimumHoursRemaining > 0;
   const upcomingShifts = shifts.slice(0, 2);
   const teams = await getTeamsForEvent(event.id);
   const qualifications = await getQualificationsForEvent(event.id);
@@ -70,6 +83,44 @@ export default async function DashboardPage() {
       <Heading as="h1" mt="4" style={{ width: 'min-content', textTransform: 'uppercase' }}>
         {t('yourDashboard')}
       </Heading>
+
+      {ticketChecksEnabled && !hasTicket && (
+        <Card
+          style={
+            {
+              '--card-background-color': 'var(--amber-3)',
+              borderColor: 'var(--amber-8)'
+            } as React.CSSProperties
+          }
+        >
+          <Flex direction="column" gap="1">
+            <Text weight="bold">{t('ticketStatusTitle')}</Text>
+            <Text>{t('ticketStatusNoTicket')}</Text>
+          </Flex>
+        </Card>
+      )}
+
+      {isBelowMinimumHours && (
+        <Card
+          style={
+            {
+              '--card-background-color': 'var(--amber-3)',
+              borderColor: 'var(--amber-8)'
+            } as React.CSSProperties
+          }
+        >
+          <Flex direction="column" gap="1">
+            <Text weight="bold">{t('minimumHoursTitle')}</Text>
+            <Text>
+              {t('minimumHoursDescription', {
+                required: requiredVolunteerHours,
+                current: totalHours,
+                remaining: minimumHoursRemaining
+              })}
+            </Text>
+          </Flex>
+        </Card>
+      )}
 
       {/* Shift/Hours cards */}
       <Flex gap={{ initial: '4', md: '6' }} direction={{ initial: 'column', md: 'row' }} asChild>

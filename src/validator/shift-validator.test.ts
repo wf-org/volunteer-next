@@ -33,6 +33,7 @@ describe('validateNewShift', () => {
     expect(result).toEqual({
       teamId: 'team-123',
       title: 'Morning Shift',
+      description: '',
       eventDay: 1,
       startTime: '08:00',
       durationHours: 4,
@@ -259,6 +260,7 @@ describe('validateExistingShift', () => {
       id: 'shift-123',
       teamId: 'team-123',
       title: 'Morning Shift',
+      description: '',
       eventDay: 1,
       startTime: '08:00',
       durationHours: 4,

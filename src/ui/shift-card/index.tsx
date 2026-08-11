@@ -80,6 +80,11 @@ export default function ShiftCard({
               <Heading as="h3" size="4" weight="medium">
                 {shift.title}
               </Heading>
+              {shift.description && (
+                <Text size="2" color="gray">
+                  {shift.description}
+                </Text>
+              )}
               <TimeSpan start={startTime} end={endTime} />
             </Flex>
             {/* Spots and Signup */}

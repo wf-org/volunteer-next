@@ -108,6 +108,23 @@ export default function EventForm({
             />
           </FormField>
           <FormField
+            name={t('requiredVolunteerHours')}
+            description={t('requiredVolunteerHoursDescription')}
+            ariaId="required-volunteer-hours-label"
+          >
+            <TextField.Root
+              name="requiredVolunteerHours"
+              aria-labelledby="required-volunteer-hours-label"
+              id="required-volunteer-hours"
+              placeholder={t('requiredVolunteerHoursPlaceholder')}
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={editingEvent?.requiredVolunteerHours ?? 0}
+              required
+            />
+          </FormField>
+          <FormField
             name={t('eventOrganiser')}
             description={t('eventOrganiserDescription')}
             ariaId="event-organiser-label"

@@ -62,12 +62,20 @@ export const validateNewEvent = (data: FormData): Omit<EventInfo, 'id'> => {
   const logo = data.get('logo')?.toString() || undefined;
   const logoDark = data.get('logoDark')?.toString() || undefined;
   const favicon = data.get('favicon')?.toString() || undefined;
+  const requiredVolunteerHoursRaw = data.get('requiredVolunteerHours')?.toString().trim() ?? '';
+  const requiredVolunteerHours =
+    requiredVolunteerHoursRaw.length === 0 ? 0 : Number(requiredVolunteerHoursRaw);
+
+  if (!Number.isInteger(requiredVolunteerHours) || requiredVolunteerHours < 0) {
+    throw new Error('Required volunteer hours must be a non-negative integer');
+  }
 
   return {
     slug,
     name,
     startDate,
     endDate,
+    requiredVolunteerHours,
     logo,
     logoDark,
     favicon

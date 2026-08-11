@@ -52,6 +52,20 @@ Sideburn uses its Pretix instance as the authentication provider for volunteerin
 7. Set the value of `OAUTH_DISCOVERY_URL` in `.env.local` to `{PRETIX_URI}/ORG_NAME/.well-known/openid-configuration` where `{PRETIX_URI}` is the URI of your Pretix instance. For local pretix as configured in step 1, this would be `http://localhost:8000`
 8. Profit!
 
+Optional: to seed admin users when OAuth is enabled, set `OAUTH_ADMIN_EMAILS` to a comma-separated list of email addresses (for example: `admin@example.org,ops@example.org`). On startup, existing matching users will be granted the admin role, and matching users will also be granted admin when they sign in via OAuth.
+
+### Enforcing valid Pretix tickets per event
+
+If you want to require users to hold a valid Pretix ticket for each event they access:
+
+1. Set `PRETIX_REQUIRE_VALID_TICKET=true`.
+2. Set `PRETIX_API_TOKEN` to a Pretix API token that can read orders.
+3. Ensure each event's slug in this app matches the Pretix event slug.
+4. Optionally set `PRETIX_ORGANIZER` and `PRETIX_API_BASE_URL`.
+5. Optional strict filtering: set `PRETIX_REQUIRED_ITEM_IDS` to a comma-separated list of Pretix item IDs that should count as valid tickets (for example: `123,456`).
+
+By default, organizer slug and API base URL are inferred from `OAUTH_DISCOVERY_URL`.
+
 ## Production
 
 ### Deploying without docker (e.g. Vercel + Neon)

@@ -12,6 +12,7 @@ import { redirect, unauthorized } from 'next/navigation';
 import { roleMatches } from './utils/roles';
 import { getEventsPath, getNoEventsPath } from './utils/path';
 import { getEventsById } from './service/event-service';
+import { hasValidPretixTicketForEvent } from './lib/pretix-ticket';
 
 /**
  * Retrieves the currently authenticated user based on the session.
@@ -90,6 +91,14 @@ export const checkAuthorisation = async (
   if (!user) {
     redirect('/');
   }
+  const hasTicketAccess = await checkCurrentEventTicketAccess(user);
+  if (!hasTicketAccess) {
+    if (!checkOnly) {
+      redirect(getNoEventsPath());
+    }
+    return false;
+  }
+
   if (!acceptedRoles || acceptedRoles.length === 0) {
     return true;
   }
@@ -102,6 +111,14 @@ export const checkAuthorisation = async (
     unauthorized();
   }
   return false;
+};
+
+const checkCurrentEventTicketAccess = async (user: User): Promise<boolean> => {
+  const event = await getCurrentEvent();
+  if (!event) {
+    return true;
+  }
+  return hasValidPretixTicketForEvent(user.email, event.slug);
 };
 
 /**

@@ -47,6 +47,7 @@ export const validateNewShift = (data: FormData): Omit<ShiftInfo, 'id'> => {
   if (!title) {
     throw new Error('Shift title is required');
   }
+  const description = data.get('description')?.toString().trim() ?? '';
   const eventDayStr = data.get('shift-day')?.toString() ?? null;
   if (!eventDayStr) {
     throw new Error('Shift day is required');
@@ -97,6 +98,7 @@ export const validateNewShift = (data: FormData): Omit<ShiftInfo, 'id'> => {
   const shift: Omit<ShiftInfo, 'id'> = {
     teamId,
     title,
+    description,
     eventDay,
     startTime: stringToTime(startTime),
     durationHours,

@@ -87,6 +87,7 @@ declare global {
     slug: UrlSlug;
     startDate: Date;
     endDate: Date;
+    requiredVolunteerHours?: number;
     archived?: boolean;
     logo?: string;
     logoDark?: string;
@@ -107,6 +108,7 @@ declare global {
     teamId: TeamId;
     isActive: boolean;
     title: string;
+    description?: string;
     eventDay: EventDay;
     startTime: TimeString;
     durationHours: number;

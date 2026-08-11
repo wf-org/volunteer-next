@@ -14,6 +14,7 @@ const rowToEvent = (row: any): EventInfo => ({
   name: row.name,
   startDate: row.startDate,
   endDate: row.endDate,
+  requiredVolunteerHours: Number(row.requiredVolunteerHours ?? 0),
   archived: Boolean(row.archivedAt),
   logo: row.logo ?? undefined,
   logoDark: row.logo_dark ?? undefined,
@@ -33,6 +34,7 @@ export const getEvents = cache(async (): Promise<EventInfo[]> => {
       "slug", 
       "startDate", 
       "endDate", 
+      "requiredVolunteerHours",
       "archivedAt", 
       "logo", 
       "logo_dark", 
@@ -65,6 +67,7 @@ export const getFilteredEvents = cache(async (filter: EventFilters): Promise<Eve
       "slug", 
       "startDate",
       "endDate",
+      "requiredVolunteerHours",
       "archivedAt",
       "logo",
       "logo_dark",
@@ -91,6 +94,7 @@ export const getActiveEvents = cache(async (): Promise<EventInfo[]> => {
         "slug",
         "startDate",
         "endDate",
+        "requiredVolunteerHours",
         "archivedAt",
         "logo",
         "logo_dark",
@@ -114,7 +118,7 @@ export const getEventsById = cache(async (eventIds: EventId[]): Promise<EventInf
     return [];
   }
   const result = await pool.query(
-    `SELECT id, name, "slug", "startDate", "endDate", "archivedAt", "logo", "logo_dark","favicon" FROM event WHERE id = ANY($1)`,
+    `SELECT id, name, "slug", "startDate", "endDate", "requiredVolunteerHours", "archivedAt", "logo", "logo_dark","favicon" FROM event WHERE id = ANY($1)`,
     [eventIds]
   );
   return result.rows.map(rowToEvent);
@@ -127,7 +131,7 @@ export const getEventsById = cache(async (eventIds: EventId[]): Promise<EventInf
  */
 export const getEventBySlug = cache(async (slug: string): Promise<EventInfo | null> => {
   const result = await pool.query(
-    'SELECT id, name, "slug", "startDate", "endDate", "archivedAt", "logo", "logo_dark","favicon" FROM event WHERE "slug" = $1',
+    'SELECT id, name, "slug", "startDate", "endDate", "requiredVolunteerHours", "archivedAt", "logo", "logo_dark","favicon" FROM event WHERE "slug" = $1',
     [slug]
   );
   if (result.rows.length === 0) {
@@ -154,16 +158,18 @@ export const createEvent = async (
       "slug", 
       "startDate", 
       "endDate", 
+      "requiredVolunteerHours",
       "logo", 
       "logo_dark", 
       "favicon"
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7) 
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
     RETURNING 
       id, 
       "slug", 
       name, 
       "startDate", 
       "endDate", 
+      "requiredVolunteerHours",
       "logo", 
       "logo_dark",
       "favicon"`,
@@ -172,6 +178,7 @@ export const createEvent = async (
       event.slug,
       event.startDate.toISOString(),
       event.endDate.toISOString(),
+      event.requiredVolunteerHours,
       event.logo,
       event.logoDark,
       event.favicon
@@ -197,16 +204,18 @@ export const updateEvent = async (event: EventInfo, client?: PoolClient): Promis
       "slug" = $2, 
       "startDate" = $3, 
       "endDate" = $4, 
-      "logo" = $5, 
-      "logo_dark" = $6,
-      "favicon" = $7 
-    WHERE id = $8 
+      "requiredVolunteerHours" = $5,
+      "logo" = $6, 
+      "logo_dark" = $7,
+      "favicon" = $8 
+    WHERE id = $9 
     RETURNING 
       id, 
       name, 
       "slug", 
       "startDate", 
       "endDate", 
+      "requiredVolunteerHours",
       "logo", 
       "logo_dark", 
       "favicon"`,
@@ -215,6 +224,7 @@ export const updateEvent = async (event: EventInfo, client?: PoolClient): Promis
       event.slug,
       event.startDate.toISOString(),
       event.endDate.toISOString(),
+      event.requiredVolunteerHours,
       event.logo,
       event.logoDark,
       event.favicon,
