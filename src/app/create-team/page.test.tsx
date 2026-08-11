@@ -59,6 +59,7 @@ const mockCreateTeam = createTeam as jest.MockedFunction<typeof createTeam>;
 const mockGetTeamsPath = getTeamsPath as jest.MockedFunction<typeof getTeamsPath>;
 
 describe('CreateTeam page', () => {
+  const previousRequireTeamLead = process.env.REQUIRE_TEAM_LEAD;
   const mockEvent: EventInfo = {
     id: 'event-1',
     name: 'Test Event',
@@ -69,6 +70,7 @@ describe('CreateTeam page', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.REQUIRE_TEAM_LEAD;
     mockGetCurrentEventOrRedirect.mockResolvedValue(mockEvent);
     mockCreateTeam.mockResolvedValue({
       id: 'team-1',
@@ -84,7 +86,17 @@ describe('CreateTeam page', () => {
     });
   });
 
-  it('create succeeds with zero team leads', async () => {
+  afterAll(() => {
+    if (previousRequireTeamLead === undefined) {
+      delete process.env.REQUIRE_TEAM_LEAD;
+    } else {
+      process.env.REQUIRE_TEAM_LEAD = previousRequireTeamLead;
+    }
+  });
+
+  it('create succeeds with zero team leads when REQUIRE_TEAM_LEAD is false', async () => {
+    process.env.REQUIRE_TEAM_LEAD = 'false';
+
     render(await CreateTeam());
 
     expect(mockTeamForm).toHaveBeenCalledTimes(1);
@@ -107,5 +119,23 @@ describe('CreateTeam page', () => {
     expect(mockAddRoleToUsers).not.toHaveBeenCalled();
     expect(mockRedirect).toHaveBeenCalledWith('/teams');
     expect(mockGetTeamsPath).toHaveBeenCalledTimes(1);
+  });
+
+  it('create fails with zero team leads when REQUIRE_TEAM_LEAD is true', async () => {
+    process.env.REQUIRE_TEAM_LEAD = 'true';
+
+    render(await CreateTeam());
+    const onSubmit = mockTeamForm.mock.calls[0][0].onSubmit;
+
+    const data = new FormData();
+    data.set('eventId', mockEvent.id);
+    data.set('name', 'Ops Team');
+    data.set('slug', 'ops-team');
+    data.set('description', 'Operations');
+    data.set('contactAddress', 'team@example.com');
+
+    await expect(onSubmit(data)).rejects.toThrow('At least one team lead is required');
+    expect(mockCreateTeam).not.toHaveBeenCalled();
+    expect(mockAddRoleToUsers).not.toHaveBeenCalled();
   });
 });

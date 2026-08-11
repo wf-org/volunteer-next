@@ -92,6 +92,7 @@ const mockGetPermissionsProfile =
 const mockGetCallbackUrl = getCallbackUrl as jest.MockedFunction<typeof getCallbackUrl>;
 
 describe('UpdateTeam page', () => {
+  const previousRequireTeamLead = process.env.REQUIRE_TEAM_LEAD;
   const mockEvent: EventInfo = {
     id: 'event-1',
     name: 'Test Event',
@@ -116,6 +117,7 @@ describe('UpdateTeam page', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.REQUIRE_TEAM_LEAD;
     mockGetCurrentEventOrRedirect.mockResolvedValue(mockEvent);
     mockGetTeamById.mockResolvedValue(mockTeam);
     mockGetUsersWithRole.mockResolvedValue([{ id: 'lead-user' }] as User[]);
@@ -129,7 +131,17 @@ describe('UpdateTeam page', () => {
     });
   });
 
-  it('update succeeds when removing the last team lead', async () => {
+  afterAll(() => {
+    if (previousRequireTeamLead === undefined) {
+      delete process.env.REQUIRE_TEAM_LEAD;
+    } else {
+      process.env.REQUIRE_TEAM_LEAD = previousRequireTeamLead;
+    }
+  });
+
+  it('update succeeds when removing the last team lead when REQUIRE_TEAM_LEAD is false', async () => {
+    process.env.REQUIRE_TEAM_LEAD = 'false';
+
     render(await UpdateTeam(props));
 
     expect(mockTeamForm).toHaveBeenCalledTimes(1);
@@ -155,7 +167,28 @@ describe('UpdateTeam page', () => {
     expect(mockRedirect).toHaveBeenCalledWith('/teams/callback');
   });
 
+  it('update fails with zero team leads when REQUIRE_TEAM_LEAD is true', async () => {
+    process.env.REQUIRE_TEAM_LEAD = 'true';
+
+    render(await UpdateTeam(props));
+    const onSubmit = mockTeamForm.mock.calls[0][0].onSubmit;
+
+    const data = new FormData();
+    data.set('id', mockTeam.id);
+    data.set('eventId', mockEvent.id);
+    data.set('name', 'Ops Team Updated');
+    data.set('slug', 'ops-team');
+    data.set('description', 'Operations updated');
+    data.set('contactAddress', 'team@example.com');
+
+    await expect(onSubmit(data)).rejects.toThrow('At least one team lead is required');
+    expect(mockUpdateTeam).not.toHaveBeenCalled();
+    expect(mockRemoveRoleFromUsers).not.toHaveBeenCalled();
+  });
+
   it('permissions after zero-lead update are intentional: former lead loses access', async () => {
+    process.env.REQUIRE_TEAM_LEAD = 'false';
+
     let hasTeamLeadAccess = true;
 
     mockCheckAuthorisation.mockImplementation(async (roles, allowFalse) => {

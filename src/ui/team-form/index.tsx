@@ -26,6 +26,7 @@ interface Props {
   editingTeam?: TeamInfo;
   editingTeamleads?: VolunteerInfo[];
   defaultContactAddress?: string;
+  requireTeamLead?: boolean;
 }
 
 const createSlugFromTeamName = (name: string): string =>
@@ -42,7 +43,8 @@ export default function TeamForm({
   backOnCancel,
   editingTeam,
   editingTeamleads,
-  defaultContactAddress
+  defaultContactAddress,
+  requireTeamLead = true
 }: Props) {
   const t = useTranslations('TeamForm');
   const router = useRouter();
@@ -176,6 +178,17 @@ export default function TeamForm({
                 defaultChecked
               />
             ))}
+            {requireTeamLead && leads.length === 0 && (
+              // This input exists only to trigger HTML5 validation if no leads are selected.
+              <input
+                type="checkbox"
+                name="teamleadId"
+                style={{ opacity: 0, position: 'absolute' }}
+                value=""
+                required
+                onInvalid={(e) => e.currentTarget.setCustomValidity(t('teamLeadRequired'))}
+              />
+            )}
             <Box mt="1">
               <Button variant="soft" type="button" onClick={() => setPickerOpen(true)}>
                 <PlusIcon />

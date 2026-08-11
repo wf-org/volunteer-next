@@ -13,11 +13,32 @@ import { hasEventStarted } from '@/utils/date';
 
 const PAGE_KEY = 'CreateTeamPage';
 
+const parseRequireTeamLead = (value: string | undefined): boolean => {
+  if (!value) {
+    return true;
+  }
+  return value.split(/\s+#/)[0].trim().toLowerCase() === 'true';
+};
+
+const getTeamLeadIds = (data: FormData, requireTeamLead: boolean): string[] => {
+  const teamLeadIds = data
+    .getAll('teamleadId')
+    .map((value) => value.toString().trim())
+    .filter((id) => id.length > 0);
+
+  if (requireTeamLead && teamLeadIds.length === 0) {
+    throw new Error('At least one team lead is required');
+  }
+
+  return teamLeadIds;
+};
+
 export const generateMetadata = metadata(PAGE_KEY);
 
 export default async function CreateTeam() {
   const event = await getCurrentEventOrRedirect();
   const defaultContactAddress = process.env.DEFAULT_TEAM_CONTACT_ADDRESS?.trim();
+  const requireTeamLead = parseRequireTeamLead(process.env.REQUIRE_TEAM_LEAD);
 
   await checkAuthorisation([{ type: 'admin' }, { type: 'organiser', eventId: event.id }]);
   const t = await getTranslations(PAGE_KEY);
@@ -32,10 +53,7 @@ export default async function CreateTeam() {
     await checkAuthorisation([{ type: 'admin' }, { type: 'organiser', eventId: event.id }]);
 
     const newTeam = validateNewTeam(data);
-    const teamleads = data
-      .getAll('teamleadId')
-      .map((value) => value.toString().trim())
-      .filter((id) => id.length > 0);
+    const teamleads = getTeamLeadIds(data, requireTeamLead);
 
     await inTransaction(async (client) => {
       const createdTeam = await createTeam(newTeam, client);
@@ -60,6 +78,7 @@ export default async function CreateTeam() {
         onSubmit={onSubmit}
         backOnCancel
         defaultContactAddress={defaultContactAddress}
+        requireTeamLead={requireTeamLead}
       />
     </Flex>
   );
