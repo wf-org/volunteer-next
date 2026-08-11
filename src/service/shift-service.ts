@@ -39,6 +39,7 @@ const rowToShift = (row: any): ShiftInfo => ({
   eventDay: row.eventDay,
   startTime: stringToTime(row.startTime),
   durationHours: row.durationHours,
+  volunteerHours: row.volunteerHours === null ? undefined : Number(row.volunteerHours),
   minVolunteers: row.minVolunteers,
   maxVolunteers: row.maxVolunteers,
   isActive: row.isActive,
@@ -74,6 +75,7 @@ const SHIFT_QUERY = `
     s."eventDay", 
     s."startTime", 
     s."durationHours",
+    s."volunteerHours",
     s."minVolunteers",
     s."maxVolunteers",
     s."isActive",
@@ -287,10 +289,11 @@ export const createShift = async (
         "eventDay",
         "startTime",
         "durationHours",
+        "volunteerHours",
         "minVolunteers",
         "maxVolunteers",
         "isActive"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING 
         "id",
         "teamId",
@@ -299,6 +302,7 @@ export const createShift = async (
         "eventDay",
         "startTime",
         "durationHours",
+        "volunteerHours",
         "minVolunteers",
         "maxVolunteers",
         "isActive"
@@ -310,6 +314,7 @@ export const createShift = async (
         shift.eventDay,
         shift.startTime,
         shift.durationHours,
+        shift.volunteerHours ?? null,
         shift.minVolunteers,
         shift.maxVolunteers,
         shift.isActive
@@ -379,9 +384,10 @@ export const updateShift = async (shift: ShiftInfo, client?: PoolClient): Promis
         "eventDay" = $4,
         "startTime" = $5,
         "durationHours" = $6,
-        "minVolunteers" = $7,
-        "maxVolunteers" = $8,
-        "isActive" = $9,
+        "volunteerHours" = $7,
+        "minVolunteers" = $8,
+        "maxVolunteers" = $9,
+        "isActive" = $10,
         "updatedAt" = NOW()
       WHERE id = $1
       RETURNING
@@ -392,6 +398,7 @@ export const updateShift = async (shift: ShiftInfo, client?: PoolClient): Promis
         "eventDay",
         "startTime",
         "durationHours",
+        "volunteerHours",
         "minVolunteers",
         "maxVolunteers",
         "isActive"
@@ -403,6 +410,7 @@ export const updateShift = async (shift: ShiftInfo, client?: PoolClient): Promis
         shift.eventDay,
         shift.startTime,
         shift.durationHours,
+        shift.volunteerHours ?? null,
         shift.minVolunteers,
         shift.maxVolunteers,
         shift.isActive
@@ -629,6 +637,7 @@ export const getShiftsForVolunteers = cache(
       s."eventDay", 
       s."startTime", 
       s."durationHours",
+      s."volunteerHours",
       s."minVolunteers",
       s."maxVolunteers",
       s."isActive",
@@ -676,7 +685,7 @@ export const getHoursForVolunteers = cache(
       `
       SELECT
       sv.user_id,
-      SUM(s."durationHours") AS total_hours
+      SUM(COALESCE(s."volunteerHours", s."durationHours")) AS total_hours
       FROM shift_volunteer sv
       JOIN shift s ON sv.shift_id = s.id
       WHERE sv.user_id = ANY($1)

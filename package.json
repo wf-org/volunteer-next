@@ -10,7 +10,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "typecheck": "tsc --noEmit",
-    "db:start": "docker compose -f docker-compose.db.yml --env-file .env.local up -d db liquibase",
+    "db:start": "docker compose -f docker-compose.db.yml --env-file .env.local up -d db; docker compose -f docker-compose.db.yml --env-file .env.local up liquibase",
     "db:stop": "docker compose -f docker-compose.db.yml --env-file .env.local down",
     "db:connect": "docker compose -f docker-compose.db.yml --env-file .env.local exec db psql -U postgres",
     "db:logs": "docker compose -f docker-compose.db.yml --env-file .env.local logs -f db",

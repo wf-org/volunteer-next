@@ -175,6 +175,20 @@ export default function ShiftDialog({
             />
           </FormField>
           <FormField
+            ariaId="shift-volunteer-hours"
+            name={t('volunteerHours')}
+            description={t('volunteerHoursDescription')}
+          >
+            <TextField.Root
+              aria-labelledby="shift-volunteer-hours"
+              name="volunteerHours"
+              type="number"
+              min={1}
+              placeholder={t('volunteerHoursPlaceholder')}
+              defaultValue={editing?.volunteerHours ?? ''}
+            />
+          </FormField>
+          <FormField
             ariaId="min-volunteers"
             name={t('minVolunteers')}
             description={t('minVolunteersDescription')}

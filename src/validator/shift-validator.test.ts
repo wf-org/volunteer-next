@@ -138,6 +138,44 @@ describe('validateNewShift', () => {
     );
   });
 
+  it('throws an error if volunteerHours is not a positive number', () => {
+    const formData = createFormData({
+      teamId: 'team-123',
+      title: 'Morning Shift',
+      'shift-day': '1',
+      'shift-time': '08:00',
+      durationHours: '4',
+      volunteerHours: '0',
+      minVolunteers: '2',
+      maxVolunteers: '5',
+      isActive: 'on',
+      requirements: []
+    });
+
+    expect(() => validateNewShift(formData)).toThrow(
+      'Shift volunteerHours must be a positive number when provided'
+    );
+  });
+
+  it('treats blank volunteerHours as unset', () => {
+    const formData = createFormData({
+      teamId: 'team-123',
+      title: 'Morning Shift',
+      'shift-day': '1',
+      'shift-time': '08:00',
+      durationHours: '4',
+      volunteerHours: '',
+      minVolunteers: '2',
+      maxVolunteers: '5',
+      isActive: 'on',
+      requirements: []
+    });
+
+    const result = validateNewShift(formData);
+
+    expect(result.volunteerHours).toBeUndefined();
+  });
+
   it('throws an error if minVolunteers is missing', () => {
     const formData = createFormData({
       teamId: 'team-123',
@@ -248,6 +286,7 @@ describe('validateExistingShift', () => {
       'shift-day': '1',
       'shift-time': '08:00',
       durationHours: '4',
+      volunteerHours: '3',
       minVolunteers: '2',
       maxVolunteers: '5',
       isActive: 'on',
@@ -264,6 +303,7 @@ describe('validateExistingShift', () => {
       eventDay: 1,
       startTime: '08:00',
       durationHours: 4,
+      volunteerHours: 3,
       minVolunteers: 2,
       maxVolunteers: 5,
       isActive: true,

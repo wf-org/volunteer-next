@@ -68,6 +68,12 @@ export const validateNewShift = (data: FormData): Omit<ShiftInfo, 'id'> => {
   if (isNaN(durationHours) || durationHours <= 0) {
     throw new Error('Shift durationHours must be a positive number');
   }
+  const volunteerHoursStr = data.get('volunteerHours')?.toString().trim() ?? '';
+  const volunteerHours =
+    volunteerHoursStr.length === 0 ? undefined : parseInt(volunteerHoursStr, 10);
+  if (volunteerHours !== undefined && (isNaN(volunteerHours) || volunteerHours <= 0)) {
+    throw new Error('Shift volunteerHours must be a positive number when provided');
+  }
   const minVolunteersStr = data.get('minVolunteers')?.toString() ?? null;
   if (!minVolunteersStr) {
     throw new Error('Shift minVolunteers is required');
@@ -102,6 +108,7 @@ export const validateNewShift = (data: FormData): Omit<ShiftInfo, 'id'> => {
     eventDay,
     startTime: stringToTime(startTime),
     durationHours,
+    ...(volunteerHours !== undefined ? { volunteerHours } : {}),
     minVolunteers,
     maxVolunteers,
     isActive,

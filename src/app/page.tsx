@@ -47,7 +47,10 @@ export default async function DashboardPage() {
 
   const permissionsProfile = getPermissionsProfile(user);
   const shifts = await getShiftsForVolunteer(event.id, user.id);
-  const totalHours = shifts.reduce((sum, shift) => sum + shift.durationHours, 0);
+  const totalHours = shifts.reduce(
+    (sum, shift) => sum + (shift.volunteerHours ?? shift.durationHours),
+    0
+  );
   const requiredVolunteerHours = event.requiredVolunteerHours ?? 0;
   const minimumHoursEnabled = Number.isFinite(requiredVolunteerHours) && requiredVolunteerHours > 0;
   const minimumHoursRemaining = minimumHoursEnabled
