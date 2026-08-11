@@ -490,7 +490,9 @@
     "addShift": "Add shift"
   },
   "ImageSelector": {
-    "selectImage": "Choose a File"
+    "selectImage": "Choose a File",
+    "uploadFailed": "Image upload failed. Please try again.",
+    "fileTooLarge": "Image must be under {maxSize}."
   },
   "EventDaySelect": {
     "day": "{parent} day",

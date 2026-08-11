@@ -112,6 +112,7 @@ declare global {
     eventDay: EventDay;
     startTime: TimeString;
     durationHours: number;
+    volunteerHours?: number;
     minVolunteers: number;
     maxVolunteers: number;
     requirements: QualificationId[];

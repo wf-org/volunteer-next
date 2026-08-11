@@ -18,7 +18,7 @@ import { usersToVolunteers, userToVolunteer } from '@/lib/volunteer';
 import { getPermissionsProfile } from '@/utils/permissions';
 import { getEventsPath } from '@/utils/path';
 import { hasEventStarted } from '@/utils/date';
-import { uploadImageAction } from '@/lib/image';
+import { getMaxImageSizeBytes, uploadImageAction } from '@/lib/image';
 
 const PAGE_KEY = 'UpdateEventPage';
 
@@ -71,6 +71,7 @@ export default async function UpdateEvent({ params }: PageProps<`/update-event/[
   }
   const permissionsProfile = getPermissionsProfile(await currentUser());
   const volunteers = usersToVolunteers(await getUsers(), permissionsProfile);
+  const maxImageSizeBytes = getMaxImageSizeBytes();
   const organiser = userToVolunteer(
     (await getUsersWithRole({ type: 'organiser', eventId: event.id }))[0],
     permissionsProfile
@@ -82,6 +83,7 @@ export default async function UpdateEvent({ params }: PageProps<`/update-event/[
       <EventForm
         onSubmit={onSubmit}
         onUpload={uploadImageAction}
+        maxImageSizeBytes={maxImageSizeBytes}
         backOnCancel
         organiserOptions={volunteers}
         editingEvent={event}

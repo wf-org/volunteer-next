@@ -18,6 +18,7 @@ import { FormField } from '../form-dialog';
 interface Props {
   onSubmit: (data: FormData) => Promise<void>;
   onUpload: (file: File) => Promise<string>;
+  maxImageSizeBytes: number;
   backOnCancel?: boolean;
   organiserOptions: VolunteerInfo[];
   editingEvent?: EventInfo;
@@ -27,6 +28,7 @@ interface Props {
 export default function EventForm({
   onSubmit,
   onUpload,
+  maxImageSizeBytes,
   backOnCancel,
   organiserOptions,
   editingEvent,
@@ -145,7 +147,12 @@ export default function EventForm({
             description={t('eventLogoDescription')}
             ariaId="event-logo-label"
           >
-            <ImageSelector name="logo" onSelect={onUpload} defaultValue={editingEvent?.logo} />
+            <ImageSelector
+              name="logo"
+              onSelect={onUpload}
+              defaultValue={editingEvent?.logo}
+              maxImageSizeBytes={maxImageSizeBytes}
+            />
           </FormField>
           <FormField
             name={t('eventLogoDark')}
@@ -156,6 +163,7 @@ export default function EventForm({
               name="logoDark"
               onSelect={onUpload}
               defaultValue={editingEvent?.logoDark}
+              maxImageSizeBytes={maxImageSizeBytes}
             />
           </FormField>
           <FormField
@@ -168,6 +176,7 @@ export default function EventForm({
               name="favicon"
               onSelect={onUpload}
               defaultValue={editingEvent?.favicon}
+              maxImageSizeBytes={maxImageSizeBytes}
             />
           </FormField>
 
