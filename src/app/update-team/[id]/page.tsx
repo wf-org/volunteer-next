@@ -20,6 +20,7 @@ export const generateMetadata = metadata(PAGE_KEY);
 
 export default async function UpdateTeam({ params, searchParams }: PageProps<'/update-team/[id]'>) {
   const { id } = await params;
+  const defaultContactAddress = process.env.DEFAULT_TEAM_CONTACT_ADDRESS?.trim();
   const redirectTo = getCallbackUrl(await searchParams) || getTeamsPath();
   const event = await getCurrentEventOrRedirect();
   const team = id ? await getTeamById(id) : null;
@@ -93,6 +94,7 @@ export default async function UpdateTeam({ params, searchParams }: PageProps<'/u
         backOnCancel
         editingTeam={team}
         editingTeamleads={teamleads}
+        defaultContactAddress={defaultContactAddress}
       />
     </Flex>
   );

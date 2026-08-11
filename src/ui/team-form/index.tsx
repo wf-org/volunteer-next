@@ -25,7 +25,15 @@ interface Props {
   backOnCancel?: boolean;
   editingTeam?: TeamInfo;
   editingTeamleads?: VolunteerInfo[];
+  defaultContactAddress?: string;
 }
+
+const createSlugFromTeamName = (name: string): string =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9\-_]/g, '');
 
 export default function TeamForm({
   eventId,
@@ -33,10 +41,14 @@ export default function TeamForm({
   onDelete,
   backOnCancel,
   editingTeam,
-  editingTeamleads
+  editingTeamleads,
+  defaultContactAddress
 }: Props) {
   const t = useTranslations('TeamForm');
   const router = useRouter();
+  const isCreating = !editingTeam;
+  const [nameValue, setNameValue] = useState(editingTeam?.name ?? '');
+  const [slugValue, setSlugValue] = useState(editingTeam?.slug ?? '');
   const [leads, setLeads] = useState<VolunteerInfo[]>(editingTeamleads || []);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -84,7 +96,14 @@ export default function TeamForm({
               id="team-name"
               placeholder={t('teamName')}
               autoComplete="off"
-              defaultValue={editingTeam?.name}
+              value={nameValue}
+              onChange={(event) => {
+                const nextName = event.currentTarget.value;
+                setNameValue(nextName);
+                if (isCreating) {
+                  setSlugValue(createSlugFromTeamName(nextName));
+                }
+              }}
               required
             />
           </FormField>
@@ -100,7 +119,8 @@ export default function TeamForm({
               placeholder={t('teamSlug')}
               pattern={TEAM_SLUG_PATTERN}
               autoComplete="off"
-              defaultValue={editingTeam?.slug}
+              value={slugValue}
+              onChange={(event) => setSlugValue(event.currentTarget.value)}
               required
             />
           </FormField>
@@ -132,7 +152,7 @@ export default function TeamForm({
               placeholder={t('contactAddress')}
               autoComplete="off"
               type="email"
-              defaultValue={editingTeam?.contactAddress}
+              defaultValue={editingTeam?.contactAddress ?? defaultContactAddress}
               required
               pattern={EMAIL_PATTERN}
             />

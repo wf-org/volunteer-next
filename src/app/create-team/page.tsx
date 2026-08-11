@@ -18,6 +18,7 @@ export const generateMetadata = metadata(PAGE_KEY);
 
 export default async function CreateTeam() {
   const event = await getCurrentEventOrRedirect();
+  const defaultContactAddress = process.env.DEFAULT_TEAM_CONTACT_ADDRESS?.trim();
 
   await checkAuthorisation([{ type: 'admin' }, { type: 'organiser', eventId: event.id }]);
   const t = await getTranslations(PAGE_KEY);
@@ -50,7 +51,12 @@ export default async function CreateTeam() {
       <Heading my="4" as="h1" align="center">
         {t('title')}
       </Heading>
-      <TeamForm eventId={event.id} onSubmit={onSubmit} backOnCancel />
+      <TeamForm
+        eventId={event.id}
+        onSubmit={onSubmit}
+        backOnCancel
+        defaultContactAddress={defaultContactAddress}
+      />
     </Flex>
   );
 }
