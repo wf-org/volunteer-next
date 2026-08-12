@@ -15,13 +15,13 @@ WORKDIR /app
 # Copy package-related files first to leverage Docker's caching mechanism
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
 
-# Install project dependencies with frozen lockfile for reproducible builds
-RUN --mount=type=cache,target=/root/.npm \
-  if [ -f package-lock.json ]; then \
-    npm ci --no-audit --no-fund; \
-  else \
-    echo "No lockfile found." && exit 1; \
-  fi
+# Install project dependencies with frozen lockfile for reproducible builds.
+# Keep this BuildKit-free so Cloud Build and local Docker work without extra flags.
+RUN if [ -f package-lock.json ]; then \
+      npm ci --no-audit --no-fund; \
+    else \
+      echo "No lockfile found." && exit 1; \
+    fi
 
 # ============================================
 # Stage 2: Build Next.js application in standalone mode
