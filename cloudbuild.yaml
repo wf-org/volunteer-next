@@ -9,10 +9,14 @@
 #
 # Recommended trigger: GitHub push to main branch.
 #
-# Required IAM for Cloud Build service account:
+# Required IAM for Cloud Build execution service account:
+# - roles/artifactregistry.writer
+# - roles/logging.logWriter
+# - roles/iam.serviceAccountTokenCreator on _DEPLOYER_SERVICE_ACCOUNT
+#
+# Required IAM for deployer service account (_DEPLOYER_SERVICE_ACCOUNT):
 # - roles/run.admin
 # - roles/iam.serviceAccountUser (on the runtime service account)
-# - roles/artifactregistry.writer
 # - roles/storage.admin (only if using _UPLOAD_BUCKET mount)
 #
 # Required IAM for Cloud Run runtime service account:
@@ -42,6 +46,7 @@ substitutions:
 
   # Deployment behavior
   _ALLOW_UNAUTH: 'true'
+  _RUN_TYPECHECK: 'false'
   _RUN_TESTS: 'false'
 
   # Newline-separated KEY=VALUE values to set on Cloud Run.
@@ -61,7 +66,7 @@ substitutions:
     PRETIX_REQUIRE_VALID_TICKET=true
     PRETIX_API_BASE_URL=https://tickets.wildfireretreat.org
     PRETIX_REQUIRED_ITEM_IDS=gen_admit_pre,gen_admit_Tier1,gen_admit_Tier2,gen_admit_Tier3,gen_admit_mgr,gen_admit_kids
-    BETTER_AUTH_URL=http://localhost:3000
+    BETTER_AUTH_URL=https://volunteer-next-848825874993.us-east1.run.app
     OAUTH_ADMIN_EMAILS=kmn318@gmail.com
     OAUTH_PROVIDER_NAME=Pretix
     OAUTH_PROVIDER_ID=volunteer-next
@@ -89,25 +94,29 @@ steps:
       - |
         npm ci --no-audit --no-fund
 
-  # - id: Typecheck
-  #   name: node:24
-  #   entrypoint: bash
-  #   args:
-  #     - -ceu
-  #     - |
-  #       npm run typecheck
+  - id: Typecheck (optional)
+    name: node:24
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ "${_RUN_TYPECHECK}" == "true" ]]; then
+          npm run typecheck
+        else
+          echo "Skipping typecheck because _RUN_TYPECHECK=${_RUN_TYPECHECK}"
+        fi
 
-  # - id: Test (optional)
-  #   name: node:24
-  #   entrypoint: bash
-  #   args:
-  #     - -ceu
-  #     - |
-  #       if [[ "${_RUN_TESTS}" == "true" ]]; then
-  #         npm test
-  #       else
-  #         echo "Skipping tests because _RUN_TESTS=${_RUN_TESTS}"
-  #       fi
+  - id: Test (optional)
+    name: node:24
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ "${_RUN_TESTS}" == "true" ]]; then
+          npm test
+        else
+          echo "Skipping tests because _RUN_TESTS=${_RUN_TESTS}"
+        fi
 
   - id: Build image
     name: gcr.io/cloud-builders/docker
@@ -139,6 +148,13 @@ steps:
     args:
       - -ceu
       - |
+        set -o pipefail
+
+        if [[ -z "${_SERVICE_NAME}" || -z "${_REGION}" || -z "${_REPOSITORY}" ]]; then
+          echo "ERROR: One or more required substitutions are empty (_SERVICE_NAME, _REGION, _REPOSITORY)." >&2
+          exit 1
+        fi
+
         IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA"
 
         IMPERSONATE_ARGS=()
@@ -151,6 +167,11 @@ steps:
           RUNTIME_SA="${_SERVICE_NAME}-runner@$PROJECT_ID.iam.gserviceaccount.com"
         fi
 
+        if [[ -n "${_DEPLOYER_SERVICE_ACCOUNT}" && "${_DEPLOYER_SERVICE_ACCOUNT}" == "$$RUNTIME_SA" ]]; then
+          echo "ERROR: _DEPLOYER_SERVICE_ACCOUNT must differ from runtime service account ($$RUNTIME_SA)." >&2
+          exit 1
+        fi
+
         AUTH_FLAG="--allow-unauthenticated"
         if [[ "${_ALLOW_UNAUTH}" != "true" ]]; then
           AUTH_FLAG="--no-allow-unauthenticated"
@@ -158,7 +179,7 @@ steps:
 
         ENV_VARS="^|^NODE_ENV=production"
         if [[ -n "${_ADDITIONAL_ENV_VARS}" ]]; then
-          ADDITIONAL_ENV_VARS="$(printf '%s' "${_ADDITIONAL_ENV_VARS}" | tr '\n' '|' | sed 's/|*$//')"
+          ADDITIONAL_ENV_VARS="$(printf '%s\n' "${_ADDITIONAL_ENV_VARS}" | sed '/^[[:space:]]*$/d' | paste -sd'|' -)"
           ENV_VARS="$$ENV_VARS|$$ADDITIONAL_ENV_VARS"
         fi
 
@@ -166,6 +187,7 @@ steps:
           gcloud
           "$${IMPERSONATE_ARGS[@]}"
           run deploy "${_SERVICE_NAME}"
+          --project "$PROJECT_ID"
           --image "$$IMAGE"
           --region "${_REGION}"
           --platform managed
@@ -192,8 +214,11 @@ steps:
         fi
 
         CMD+=("$$AUTH_FLAG")
+        CMD+=(--quiet)
 
         echo "Deploying ${_SERVICE_NAME} to ${_REGION} with image $$IMAGE"
+        echo "Deployer SA: ${_DEPLOYER_SERVICE_ACCOUNT:-<cloud-build-identity>}"
+        echo "Runtime SA: $$RUNTIME_SA"
         "$${CMD[@]}"
 
 images:
