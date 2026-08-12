@@ -29,6 +29,9 @@ substitutions:
   _REGION: us-east1
   _REPOSITORY: containers
   _RUNTIME_SERVICE_ACCOUNT: ''
+  # Optional: service account used only for deploy API calls.
+  # If empty, deploy runs as the Cloud Build execution identity.
+  _DEPLOYER_SERVICE_ACCOUNT: ''
 
   # Runtime tuning
   _CPU: '1'
@@ -124,6 +127,11 @@ steps:
       - |
         IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA"
 
+        IMPERSONATE_ARGS=()
+        if [[ -n "${_DEPLOYER_SERVICE_ACCOUNT}" ]]; then
+          IMPERSONATE_ARGS+=(--impersonate-service-account "${_DEPLOYER_SERVICE_ACCOUNT}")
+        fi
+
         RUNTIME_SA="${_RUNTIME_SERVICE_ACCOUNT}"
         if [[ -z "$$RUNTIME_SA" ]]; then
           RUNTIME_SA="${_SERVICE_NAME}-runner@$PROJECT_ID.iam.gserviceaccount.com"
@@ -140,7 +148,9 @@ steps:
         fi
 
         CMD=(
-          gcloud run deploy "${_SERVICE_NAME}"
+          gcloud
+          "$${IMPERSONATE_ARGS[@]}"
+          run deploy "${_SERVICE_NAME}"
           --image "$$IMAGE"
           --region "${_REGION}"
           --platform managed
