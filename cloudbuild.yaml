@@ -52,19 +52,18 @@ substitutions:
     REQUIRE_TEAM_LEAD=false,
     MAX_IMAGE_SIZE_BYTES=1MB,
     DEFAULT_TEAM_CONTACT_ADDRESS=team@example.com,
-    POSTGRES_HOST=35.190.152.172,
+    POSTGRES_HOST=10.112.224.3,
     POSTGRES_USER=postgres,
     POSTGRES_DB=volunteer-next,
     POSTGRES_PORT=5432,
     PRETIX_REQUIRE_VALID_TICKET=true,
     PRETIX_API_BASE_URL=https://tickets.wildfireretreat.org,
-    PRETIX_REQUIRED_ITEM_IDS="gen_admit_pre,gen_admit_Tier1,gen_admit_Tier2,gen_admit_Tier3,gen_admit_mgr,gen_admit_kids",
+    PRETIX_REQUIRED_ITEM_IDS=gen_admit_pre\,gen_admit_Tier1\,gen_admit_Tier2\,gen_admit_Tier3\,gen_admit_mgr\,gen_admit_kids,
     BETTER_AUTH_URL=http://localhost:3000,
-    AUTH_MODE=oauth,
-    OAUTH_ADMIN_EMAILS="kmn318@gmail.com",
+    OAUTH_ADMIN_EMAILS=kmn318@gmail.com,
     OAUTH_PROVIDER_NAME=Pretix,
     OAUTH_PROVIDER_ID=volunteer-next,
-    OAUTH_DISCOVERY_URL=https://tickets.wildfireretreat.org/saf/.well-known/openid-configuration,
+    OAUTH_DISCOVERY_URL=https://tickets.wildfireretreat.org/saf/.well-known/openid-configuration
 
   # Comma-separated Cloud Run secret bindings.
   # Format: ENV_VAR=SECRET_NAME:VERSION
@@ -73,7 +72,7 @@ substitutions:
     OAUTH_CLIENT_SECRET=OAUTH_CLIENT_SECRET:latest,
     OAUTH_CLIENT_ID=OAUTH_CLIENT_ID:latest,
     PRETIX_API_TOKEN=PRETIX_API_TOKEN:latest,
-    POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest,
+    POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest
 
   # Optional: set this to a bucket name (without gs://) to persist /app/uploads.
   # Leave empty to skip mount.
