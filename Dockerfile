@@ -69,8 +69,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Copy production assets, if they exist (use glob pattern to prevent failure if the directory doesn't exist)
-COPY --from=builder --chown=node:node /app/publi[c]/ ./public/
+# Ensure /app/public always exists in builder so cross-stage copy never fails.
+RUN mkdir -p /app/public
+
+# Copy production assets directory.
+COPY --from=builder --chown=node:node /app/public ./public
 
 # Create uploads directory and set permissions
 RUN mkdir uploads
