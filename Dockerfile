@@ -38,6 +38,9 @@ COPY --from=dependencies /app/node_modules ./node_modules
 # Copy application source code
 COPY . .
 
+# Ensure /app/public exists even when the repo has no public assets.
+RUN mkdir -p /app/public
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -68,9 +71,6 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-
-# Ensure /app/public always exists in builder so cross-stage copy never fails.
-RUN mkdir -p /app/public
 
 # Copy production assets directory.
 COPY --from=builder --chown=node:node /app/public ./public
