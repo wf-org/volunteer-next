@@ -5,22 +5,11 @@
  * @since 2025-11-10
  */
 
+import type { AppRoutes } from '../../../../.next/types/routes';
+
 declare global {
   type FormSubmitAction = (data: FormData) => Promise<void>;
-  type RouteParamValue = string | string[] | undefined;
-  type RouteParams = Record<string, RouteParamValue>;
-  type RouteSearchParams = Record<string, RouteParamValue>;
-
-  interface RouteContext<T extends string = string> {
-    params: Promise<RouteParams>;
-  }
-
-  interface PageProps<T extends string = string> {
-    params: Promise<RouteParams>;
-    searchParams: Promise<RouteSearchParams>;
-  }
-
-  type PagePropsWithSearch<T extends string, S> = Omit<PageProps<T>, 'searchParams'> & {
+  type PagePropsWithSearch<T extends AppRoutes, S> = Omit<PageProps<T>, 'searchParams'> & {
     searchParams: Promise<S>;
   };
   type WithRequired<T, K extends keyof T> = T & Required<Pick<T, K>>;
