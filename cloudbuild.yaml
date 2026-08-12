@@ -44,25 +44,27 @@ substitutions:
   _ALLOW_UNAUTH: 'true'
   _RUN_TESTS: 'false'
 
-  # Comma-separated KEY=VALUE values to set on Cloud Run.
+  # Newline-separated KEY=VALUE values to set on Cloud Run.
+  # The deploy step converts this block to a | delimited list using
+  # gcloud custom delimiter syntax (^|^), so commas are safe in values.
   # Put only non-sensitive variables here.
-  _ADDITIONAL_ENV_VARS: >-
-    AUTH_MODE=oauth,
-    APP_NAME=volunteer-next,
-    REQUIRE_TEAM_LEAD=false,
-    MAX_IMAGE_SIZE_BYTES=1MB,
-    DEFAULT_TEAM_CONTACT_ADDRESS=team@example.com,
-    POSTGRES_HOST=10.112.224.3,
-    POSTGRES_USER=postgres,
-    POSTGRES_DB=volunteer-next,
-    POSTGRES_PORT=5432,
-    PRETIX_REQUIRE_VALID_TICKET=true,
-    PRETIX_API_BASE_URL=https://tickets.wildfireretreat.org,
-    PRETIX_REQUIRED_ITEM_IDS=gen_admit_pre\,gen_admit_Tier1\,gen_admit_Tier2\,gen_admit_Tier3\,gen_admit_mgr\,gen_admit_kids,
-    BETTER_AUTH_URL=http://localhost:3000,
-    OAUTH_ADMIN_EMAILS=kmn318@gmail.com,
-    OAUTH_PROVIDER_NAME=Pretix,
-    OAUTH_PROVIDER_ID=volunteer-next,
+  _ADDITIONAL_ENV_VARS: |-
+    AUTH_MODE=oauth
+    APP_NAME=volunteer-next
+    REQUIRE_TEAM_LEAD=false
+    MAX_IMAGE_SIZE_BYTES=1MB
+    DEFAULT_TEAM_CONTACT_ADDRESS=team@example.com
+    POSTGRES_HOST=10.112.224.3
+    POSTGRES_USER=postgres
+    POSTGRES_DB=volunteer-next
+    POSTGRES_PORT=5432
+    PRETIX_REQUIRE_VALID_TICKET=true
+    PRETIX_API_BASE_URL=https://tickets.wildfireretreat.org
+    PRETIX_REQUIRED_ITEM_IDS=gen_admit_pre,gen_admit_Tier1,gen_admit_Tier2,gen_admit_Tier3,gen_admit_mgr,gen_admit_kids
+    BETTER_AUTH_URL=http://localhost:3000
+    OAUTH_ADMIN_EMAILS=kmn318@gmail.com
+    OAUTH_PROVIDER_NAME=Pretix
+    OAUTH_PROVIDER_ID=volunteer-next
     OAUTH_DISCOVERY_URL=https://tickets.wildfireretreat.org/saf/.well-known/openid-configuration
 
   # Comma-separated Cloud Run secret bindings.
@@ -154,9 +156,10 @@ steps:
           AUTH_FLAG="--no-allow-unauthenticated"
         fi
 
-        ENV_VARS="NODE_ENV=production"
+        ENV_VARS="^|^NODE_ENV=production"
         if [[ -n "${_ADDITIONAL_ENV_VARS}" ]]; then
-          ENV_VARS="$$ENV_VARS,${_ADDITIONAL_ENV_VARS}"
+          ADDITIONAL_ENV_VARS="$(printf '%s' "${_ADDITIONAL_ENV_VARS}" | tr '\n' '|' | sed 's/|*$//')"
+          ENV_VARS="$$ENV_VARS|$$ADDITIONAL_ENV_VARS"
         fi
 
         CMD=(
