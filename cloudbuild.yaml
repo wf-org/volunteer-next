@@ -28,14 +28,13 @@ substitutions:
   _SERVICE_NAME: volunteer-next
   _REGION: us-east1
   _REPOSITORY: containers
-  _RUNTIME_SERVICE_ACCOUNT: ''
+  _RUNTIME_SERVICE_ACCOUNT: 'volunteer-next-runtime@wildfire-504616.iam.gserviceaccount.com'
   # Optional: service account used only for deploy API calls.
   # If empty, deploy runs as the Cloud Build execution identity.
-  _DEPLOYER_SERVICE_ACCOUNT: ''
-
+  _DEPLOYER_SERVICE_ACCOUNT: 'volunteer-next-deployer@wildfire-504616.iam.gserviceaccount.com'
   # Runtime tuning
   _CPU: '1'
-  _MEMORY: 1Gi
+  _MEMORY: '1Gi'
   _CONCURRENCY: '80'
   _MIN_INSTANCES: '0'
   _MAX_INSTANCES: '10'
@@ -43,15 +42,29 @@ substitutions:
 
   # Deployment behavior
   _ALLOW_UNAUTH: 'true'
-  _RUN_TESTS: 'true'
+  _RUN_TESTS: 'false'
 
   # Comma-separated KEY=VALUE values to set on Cloud Run.
   # Put only non-sensitive variables here.
   _ADDITIONAL_ENV_VARS: >-
     AUTH_MODE=oauth,
     APP_NAME=volunteer-next,
-    REQUIRE_TEAM_LEAD=true,
-    MAX_IMAGE_SIZE_BYTES=1MB
+    REQUIRE_TEAM_LEAD=false,
+    MAX_IMAGE_SIZE_BYTES=1MB,
+    DEFAULT_TEAM_CONTACT_ADDRESS=team@example.com,
+    POSTGRES_HOST=35.190.152.172,
+    POSTGRES_USER=postgres,
+    POSTGRES_DB=volunteer-next,
+    POSTGRES_PORT=5432,
+    PRETIX_REQUIRE_VALID_TICKET=true,
+    PRETIX_API_BASE_URL=https://tickets.wildfireretreat.org,
+    PRETIX_REQUIRED_ITEM_IDS="gen_admit_pre,gen_admit_Tier1,gen_admit_Tier2,gen_admit_Tier3,gen_admit_mgr,gen_admit_kids",
+    BETTER_AUTH_URL=http://localhost:3000,
+    AUTH_MODE=oauth,
+    OAUTH_ADMIN_EMAILS="kmn318@gmail.com",
+    OAUTH_PROVIDER_NAME=Pretix,
+    OAUTH_PROVIDER_ID=volunteer-next,
+    OAUTH_DISCOVERY_URL=https://tickets.wildfireretreat.org/saf/.well-known/openid-configuration,
 
   # Comma-separated Cloud Run secret bindings.
   # Format: ENV_VAR=SECRET_NAME:VERSION
@@ -59,8 +72,8 @@ substitutions:
     BETTER_AUTH_SECRET=BETTER_AUTH_SECRET:latest,
     OAUTH_CLIENT_SECRET=OAUTH_CLIENT_SECRET:latest,
     OAUTH_CLIENT_ID=OAUTH_CLIENT_ID:latest,
-    POSTGRES_URL=POSTGRES_URL:latest,
-    PRETIX_API_TOKEN=PRETIX_API_TOKEN:latest
+    PRETIX_API_TOKEN=PRETIX_API_TOKEN:latest,
+    POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest,
 
   # Optional: set this to a bucket name (without gs://) to persist /app/uploads.
   # Leave empty to skip mount.

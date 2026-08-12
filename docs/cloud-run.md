@@ -44,7 +44,7 @@ gcloud services enable \
 
 ## Required IAM
 
-### Cloud Build service account
+### Option A: deploy directly as Cloud Build service account
 
 Grant these roles to your Cloud Build service account (`PROJECT_NUMBER@cloudbuild.gserviceaccount.com`):
 
@@ -53,9 +53,67 @@ Grant these roles to your Cloud Build service account (`PROJECT_NUMBER@cloudbuil
 - `roles/artifactregistry.writer`
 - `roles/storage.admin` (only if using `_UPLOAD_BUCKET` mount)
 
+### Option B (recommended): deploy via a dedicated deployer service account
+
+This repo's [cloudbuild.yaml](../cloudbuild.yaml) supports optional deploy impersonation with `_DEPLOYER_SERVICE_ACCOUNT`.
+
+Set these trigger substitutions:
+
+- `_DEPLOYER_SERVICE_ACCOUNT=volunteer-next-deployer@wildfire-504616.iam.gserviceaccount.com`
+- `_RUNTIME_SERVICE_ACCOUNT=volunteer-next-runner@wildfire-504616.iam.gserviceaccount.com`
+
+Then configure IAM:
+
+1. Create deployer service account:
+
+```bash
+gcloud iam service-accounts create volunteer-next-deployer \
+  --project wildfire-504616 \
+  --display-name "Volunteer Next Deployer"
+```
+
+2. Allow Cloud Build SA to impersonate deployer SA:
+
+```bash
+PROJECT_NUMBER="$(gcloud projects describe wildfire-504616 --format='value(projectNumber)')"
+CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+
+gcloud iam service-accounts add-iam-policy-binding \
+  volunteer-next-deployer@wildfire-504616.iam.gserviceaccount.com \
+  --project wildfire-504616 \
+  --member="serviceAccount:${CB_SA}" \
+  --role="roles/iam.serviceAccountTokenCreator"
+```
+
+3. Grant deploy rights to deployer SA:
+
+```bash
+gcloud projects add-iam-policy-binding wildfire-504616 \
+  --member="serviceAccount:volunteer-next-deployer@wildfire-504616.iam.gserviceaccount.com" \
+  --role="roles/run.admin"
+```
+
+4. Allow deployer SA to set runtime SA on Cloud Run:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+  volunteer-next-runner@wildfire-504616.iam.gserviceaccount.com \
+  --project wildfire-504616 \
+  --member="serviceAccount:volunteer-next-deployer@wildfire-504616.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser"
+```
+
+5. If deploy updates Cloud Storage volume mounts, also grant deployer SA:
+
+```bash
+gcloud projects add-iam-policy-binding wildfire-504616 \
+  --member="serviceAccount:volunteer-next-deployer@wildfire-504616.iam.gserviceaccount.com" \
+  --role="roles/storage.admin"
+```
+
 ### Cloud Run runtime service account
 
-Grant these roles to your runtime service account (default in this pipeline is `${_SERVICE_NAME}-runner@PROJECT_ID.iam.gserviceaccount.com`):
+Grant these roles to your runtime service account (default in this pipeline is `${_SERVICE_NAME}-runner@wildfire-504616.iam.gserviceaccount.com`):
 
 - `roles/secretmanager.secretAccessor`
 - `roles/storage.objectAdmin` (only if using `_UPLOAD_BUCKET` mount)
@@ -66,12 +124,12 @@ Grant these roles to your runtime service account (default in this pipeline is `
 Create a Docker repository that matches substitutions in [cloudbuild.yaml](../cloudbuild.yaml):
 
 ```bash
-export PROJECT_ID="your-project-id"
+export wildfire-504616="your-project-id"
 export REGION="us-central1"
 export REPOSITORY="containers"
 
 gcloud artifacts repositories create "$REPOSITORY" \
-  --project "$PROJECT_ID" \
+  --project "$wildfire-504616" \
   --location "$REGION" \
   --repository-format docker \
   --description "Container images for volunteer-next"
@@ -97,7 +155,7 @@ printf '%s' 'REPLACE_ME' | gcloud secrets create BETTER_AUTH_SECRET --data-file=
 printf '%s' 'REPLACE_ME_NEW' | gcloud secrets versions add BETTER_AUTH_SECRET --data-file=-
 
 # Grant runtime SA access
-export RUNTIME_SA="volunteer-next-runner@${PROJECT_ID}.iam.gserviceaccount.com"
+export RUNTIME_SA="volunteer-next-runner@${wildfire-504616}.iam.gserviceaccount.com"
 gcloud secrets add-iam-policy-binding BETTER_AUTH_SECRET \
   --member="serviceAccount:${RUNTIME_SA}" \
   --role="roles/secretmanager.secretAccessor"
@@ -112,7 +170,7 @@ This app writes uploaded images to `/app/uploads`. Cloud Run local filesystem is
 Create a bucket:
 
 ```bash
-export UPLOAD_BUCKET="${PROJECT_ID}-volunteer-next-uploads"
+export UPLOAD_BUCKET="${wildfire-504616}-volunteer-next-uploads"
 gcloud storage buckets create "gs://${UPLOAD_BUCKET}" --location "$REGION"
 
 gcloud storage buckets add-iam-policy-binding "gs://${UPLOAD_BUCKET}" \
@@ -138,7 +196,7 @@ In Cloud Build Triggers:
 _SERVICE_NAME=volunteer-next
 _REGION=us-central1
 _REPOSITORY=containers
-_RUNTIME_SERVICE_ACCOUNT=volunteer-next-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+_RUNTIME_SERVICE_ACCOUNT=volunteer-next-runner@YOUR_wildfire-504616.iam.gserviceaccount.com
 _CPU=1
 _MEMORY=1Gi
 _CONCURRENCY=80

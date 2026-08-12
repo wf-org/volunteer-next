@@ -42,7 +42,7 @@ console.log('DB_PASS=' + JSON.stringify(decodeURIComponent(url.password || '')))
 
 CMD="${1:-update}"
 cd "$(dirname "$0")/.."
-docker compose run --rm --no-deps liquibase \
+docker compose -f docker-compose.db.yml run --rm --no-deps liquibase \
   --classpath=/liquibase/lib/postgresql.jar \
   --url="$JDBC_URL" \
   --username="$DB_USER" \
