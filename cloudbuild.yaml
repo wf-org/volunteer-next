@@ -125,7 +125,7 @@ steps:
         IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA"
 
         RUNTIME_SA="${_RUNTIME_SERVICE_ACCOUNT}"
-        if [[ -z "$RUNTIME_SA" ]]; then
+        if [[ -z "$$RUNTIME_SA" ]]; then
           RUNTIME_SA="${_SERVICE_NAME}-runner@$PROJECT_ID.iam.gserviceaccount.com"
         fi
 
@@ -136,23 +136,23 @@ steps:
 
         ENV_VARS="NODE_ENV=production"
         if [[ -n "${_ADDITIONAL_ENV_VARS}" ]]; then
-          ENV_VARS="${ENV_VARS},${_ADDITIONAL_ENV_VARS}"
+          ENV_VARS="$$ENV_VARS,${_ADDITIONAL_ENV_VARS}"
         fi
 
         CMD=(
           gcloud run deploy "${_SERVICE_NAME}"
-          --image "$IMAGE"
+          --image "$$IMAGE"
           --region "${_REGION}"
           --platform managed
           --execution-environment gen2
-          --service-account "$RUNTIME_SA"
+          --service-account "$$RUNTIME_SA"
           --cpu "${_CPU}"
           --memory "${_MEMORY}"
           --concurrency "${_CONCURRENCY}"
           --min-instances "${_MIN_INSTANCES}"
           --max-instances "${_MAX_INSTANCES}"
           --timeout "${_TIMEOUT}"
-          --set-env-vars "$ENV_VARS"
+          --set-env-vars "$$ENV_VARS"
         )
 
         if [[ -n "${_SECRET_BINDINGS}" ]]; then
@@ -166,10 +166,10 @@ steps:
           )
         fi
 
-        CMD+=("$AUTH_FLAG")
+        CMD+=("$$AUTH_FLAG")
 
-        echo "Deploying ${_SERVICE_NAME} to ${_REGION} with image ${IMAGE}"
-        "${CMD[@]}"
+        echo "Deploying ${_SERVICE_NAME} to ${_REGION} with image $$IMAGE"
+        "$${CMD[@]}"
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA
