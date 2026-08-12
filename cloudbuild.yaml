@@ -1,0 +1,176 @@
+# Cloud Build pipeline for volunteer-next
+#
+# What it does:
+# 1) Installs dependencies
+# 2) Runs typecheck
+# 3) Optionally runs tests
+# 4) Builds and pushes Docker images to Artifact Registry
+# 5) Deploys to Cloud Run
+#
+# Recommended trigger: GitHub push to main branch.
+#
+# Required IAM for Cloud Build service account:
+# - roles/run.admin
+# - roles/iam.serviceAccountUser (on the runtime service account)
+# - roles/artifactregistry.writer
+# - roles/storage.admin (only if using _UPLOAD_BUCKET mount)
+#
+# Required IAM for Cloud Run runtime service account:
+# - roles/secretmanager.secretAccessor
+# - roles/cloudsql.client (only if using Cloud SQL)
+# - roles/storage.objectAdmin (only if using _UPLOAD_BUCKET mount)
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  dynamicSubstitutions: true
+
+substitutions:
+  _SERVICE_NAME: volunteer-next
+  _REGION: us-central1
+  _REPOSITORY: containers
+  _RUNTIME_SERVICE_ACCOUNT: ''
+
+  # Runtime tuning
+  _CPU: '1'
+  _MEMORY: 1Gi
+  _CONCURRENCY: '80'
+  _MIN_INSTANCES: '0'
+  _MAX_INSTANCES: '10'
+  _TIMEOUT: '300'
+
+  # Deployment behavior
+  _ALLOW_UNAUTH: 'true'
+  _RUN_TESTS: 'true'
+
+  # Comma-separated KEY=VALUE values to set on Cloud Run.
+  # Put only non-sensitive variables here.
+  _ADDITIONAL_ENV_VARS: >-
+    AUTH_MODE=oauth,
+    APP_NAME=volunteer-next,
+    REQUIRE_TEAM_LEAD=true,
+    MAX_IMAGE_SIZE_BYTES=1MB
+
+  # Comma-separated Cloud Run secret bindings.
+  # Format: ENV_VAR=SECRET_NAME:VERSION
+  _SECRET_BINDINGS: >-
+    BETTER_AUTH_SECRET=BETTER_AUTH_SECRET:latest,
+    OAUTH_CLIENT_SECRET=OAUTH_CLIENT_SECRET:latest,
+    OAUTH_CLIENT_ID=OAUTH_CLIENT_ID:latest,
+    POSTGRES_URL=POSTGRES_URL:latest,
+    PRETIX_API_TOKEN=PRETIX_API_TOKEN:latest
+
+  # Optional: set this to a bucket name (without gs://) to persist /app/uploads.
+  # Leave empty to skip mount.
+  _UPLOAD_BUCKET: ''
+
+steps:
+  - id: Install dependencies
+    name: node:24
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        npm ci --no-audit --no-fund
+
+  - id: Typecheck
+    name: node:24
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        npm run typecheck
+
+  - id: Test (optional)
+    name: node:24
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ "${_RUN_TESTS}" == "true" ]]; then
+          npm test
+        else
+          echo "Skipping tests because _RUN_TESTS=${_RUN_TESTS}"
+        fi
+
+  - id: Build image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest
+      - .
+
+  - id: Push commit image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA
+
+  - id: Push latest image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest
+
+  - id: Deploy to Cloud Run
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA"
+
+        RUNTIME_SA="${_RUNTIME_SERVICE_ACCOUNT}"
+        if [[ -z "$RUNTIME_SA" ]]; then
+          RUNTIME_SA="${_SERVICE_NAME}-runner@$PROJECT_ID.iam.gserviceaccount.com"
+        fi
+
+        AUTH_FLAG="--allow-unauthenticated"
+        if [[ "${_ALLOW_UNAUTH}" != "true" ]]; then
+          AUTH_FLAG="--no-allow-unauthenticated"
+        fi
+
+        ENV_VARS="NODE_ENV=production"
+        if [[ -n "${_ADDITIONAL_ENV_VARS}" ]]; then
+          ENV_VARS="${ENV_VARS},${_ADDITIONAL_ENV_VARS}"
+        fi
+
+        CMD=(
+          gcloud run deploy "${_SERVICE_NAME}"
+          --image "$IMAGE"
+          --region "${_REGION}"
+          --platform managed
+          --execution-environment gen2
+          --service-account "$RUNTIME_SA"
+          --cpu "${_CPU}"
+          --memory "${_MEMORY}"
+          --concurrency "${_CONCURRENCY}"
+          --min-instances "${_MIN_INSTANCES}"
+          --max-instances "${_MAX_INSTANCES}"
+          --timeout "${_TIMEOUT}"
+          --set-env-vars "$ENV_VARS"
+        )
+
+        if [[ -n "${_SECRET_BINDINGS}" ]]; then
+          CMD+=(--set-secrets "${_SECRET_BINDINGS}")
+        fi
+
+        if [[ -n "${_UPLOAD_BUCKET}" ]]; then
+          CMD+=(
+            --add-volume "name=uploads,type=cloud-storage,bucket=${_UPLOAD_BUCKET}"
+            --add-volume-mount "volume=uploads,mount-path=/app/uploads"
+          )
+        fi
+
+        CMD+=("$AUTH_FLAG")
+
+        echo "Deploying ${_SERVICE_NAME} to ${_REGION} with image ${IMAGE}"
+        "${CMD[@]}"
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest
