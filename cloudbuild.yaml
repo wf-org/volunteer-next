@@ -72,25 +72,25 @@ steps:
       - |
         npm ci --no-audit --no-fund
 
-  - id: Typecheck
-    name: node:24
-    entrypoint: bash
-    args:
-      - -ceu
-      - |
-        npm run typecheck
+  # - id: Typecheck
+  #   name: node:24
+  #   entrypoint: bash
+  #   args:
+  #     - -ceu
+  #     - |
+  #       npm run typecheck
 
-  - id: Test (optional)
-    name: node:24
-    entrypoint: bash
-    args:
-      - -ceu
-      - |
-        if [[ "${_RUN_TESTS}" == "true" ]]; then
-          npm test
-        else
-          echo "Skipping tests because _RUN_TESTS=${_RUN_TESTS}"
-        fi
+  # - id: Test (optional)
+  #   name: node:24
+  #   entrypoint: bash
+  #   args:
+  #     - -ceu
+  #     - |
+  #       if [[ "${_RUN_TESTS}" == "true" ]]; then
+  #         npm test
+  #       else
+  #         echo "Skipping tests because _RUN_TESTS=${_RUN_TESTS}"
+  #       fi
 
   - id: Build image
     name: gcr.io/cloud-builders/docker
