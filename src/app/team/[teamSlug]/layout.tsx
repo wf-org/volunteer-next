@@ -18,6 +18,7 @@ import TeamTabs from '@/ui/team-tabs';
 import NextLink from 'next/link';
 import { Pencil2Icon } from '@radix-ui/react-icons';
 import { headers } from 'next/headers';
+import Markdown from '@/ui/markdown';
 
 const PAGE_KEY = 'TeamPage';
 
@@ -72,9 +73,7 @@ export default async function TeamLayout({ params, children }: Props) {
           )}
         </Heading>
       </Flex>
-      <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit' }}>
-        {team.description}
-      </pre>
+      <Markdown content={team.description} />
       <DataList.Root my="4">
         <DataList.Item>
           <DataList.Label>{t('contact')}</DataList.Label>

@@ -17,6 +17,7 @@ import { getQualificationDetailsPath } from '@/utils/path';
 import { useState } from 'react';
 import ProgressBar from '../progress-bar';
 import NextLink from 'next/link';
+import Markdown from '@/ui/markdown';
 
 interface Props {
   shift: ShiftInfo;
@@ -81,8 +82,8 @@ export default function ShiftCard({
                 {shift.title}
               </Heading>
               {shift.description && (
-                <Text size="2" color="gray">
-                  {shift.description}
+                <Text as="div" size="2" color="gray">
+                  <Markdown content={shift.description} />
                 </Text>
               )}
               <TimeSpan start={startTime} end={endTime} />

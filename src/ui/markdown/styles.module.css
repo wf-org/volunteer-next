@@ -1,0 +1,23 @@
+.content {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.content :global(*) {
+  margin: 0;
+}
+
+.content :global(* + *) {
+  margin-top: 0.5rem;
+}
+
+.content :global(ul),
+.content :global(ol) {
+  padding-left: 1.25rem;
+}
+
+.content :global(code) {
+  font-family: var(--code-font-family);
+  font-size: 0.9em;
+}
