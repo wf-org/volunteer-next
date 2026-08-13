@@ -37,7 +37,7 @@ substitutions:
   # If empty, deploy runs as the Cloud Build execution identity.
   _DEPLOYER_SERVICE_ACCOUNT: 'volunteer-next-deployer@wildfire-504616.iam.gserviceaccount.com'
   # Runtime tuning
-  _CPU: '0.5'
+  _CPU: '1'
   _MEMORY: '0.5Gi'
   _CONCURRENCY: '80'
   _MIN_INSTANCES: '0'
