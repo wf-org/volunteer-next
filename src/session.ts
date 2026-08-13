@@ -91,12 +91,15 @@ export const checkAuthorisation = async (
   if (!user) {
     redirect('/');
   }
-  const hasTicketAccess = await checkCurrentEventTicketAccess(user);
-  if (!hasTicketAccess) {
-    if (!checkOnly) {
-      redirect(getNoEventsPath());
+  const isAdminUser = user.roles.some((role) => role.type === 'admin');
+  if (!isAdminUser) {
+    const hasTicketAccess = await checkCurrentEventTicketAccess(user);
+    if (!hasTicketAccess) {
+      if (!checkOnly) {
+        redirect(getNoEventsPath());
+      }
+      return false;
     }
-    return false;
   }
 
   if (!acceptedRoles || acceptedRoles.length === 0) {

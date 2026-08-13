@@ -148,7 +148,7 @@ describe('checkAuthorisation', () => {
     expect(result).toBe(true);
   });
 
-  it('should redirect to no-events when admin ticket check fails for selected event', async () => {
+  it('should allow admin even when ticket check would fail for selected event', async () => {
     mockUserAs({ roles: [{ type: 'admin' }], email: 'admin@example.org' });
     mockHeaders.mockResolvedValue(new Headers({ 'x-event-id': 'event-id' }));
     mockGetEventsById.mockResolvedValueOnce([
@@ -158,13 +158,11 @@ describe('checkAuthorisation', () => {
       }
     ] as never);
     mockHasValidPretixTicketForEvent.mockResolvedValueOnce(false);
-    mockRedirect.mockImplementationOnce(() => {
-      throw new Error('Redirected');
-    });
+    const result = await checkAuthorisation([{ type: 'admin' }]);
 
-    await expect(checkAuthorisation([{ type: 'admin' }])).rejects.toThrow('Redirected');
-    expect(mockRedirect).toHaveBeenCalledWith('/no-events');
-    expect(mockHasValidPretixTicketForEvent).toHaveBeenCalledWith('admin@example.org', 'my-event');
+    expect(result).toBe(true);
+    expect(mockRedirect).not.toHaveBeenCalledWith('/no-events');
+    expect(mockHasValidPretixTicketForEvent).not.toHaveBeenCalled();
   });
 
   it('should redirect to no-events when ticket check fails for selected event', async () => {
