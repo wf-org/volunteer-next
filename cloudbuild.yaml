@@ -4,8 +4,9 @@
 # 1) Installs dependencies
 # 2) Runs typecheck
 # 3) Optionally runs tests
-# 4) Builds and pushes Docker images to Artifact Registry
-# 5) Deploys to Cloud Run
+# 4) Runs DB migrations (Cloud Run init-container equivalent)
+# 5) Builds and pushes Docker images to Artifact Registry
+# 6) Deploys to Cloud Run
 #
 # Recommended trigger: GitHub push to main branch.
 #
@@ -32,6 +33,12 @@ substitutions:
   _SERVICE_NAME: volunteer-next
   _REGION: us-east1
   _REPOSITORY: containers
+  _DB_HOST: '10.112.224.3'
+  _DB_PORT: '5432'
+  _DB_NAME: 'volunteer-next'
+  _DB_USER: 'postgres'
+  _DB_PASSWORD_SECRET: 'POSTGRES_PASSWORD'
+  _DB_PASSWORD_SECRET_VERSION: 'latest'
   _RUNTIME_SERVICE_ACCOUNT: 'volunteer-next-runtime@wildfire-504616.iam.gserviceaccount.com'
   # Optional: service account used only for deploy API calls.
   # If empty, deploy runs as the Cloud Build execution identity.
@@ -48,6 +55,7 @@ substitutions:
   _ALLOW_UNAUTH: 'true'
   _RUN_TYPECHECK: 'false'
   _RUN_TESTS: 'false'
+  _RUN_MIGRATIONS: 'true'
 
   # Newline-separated KEY=VALUE values to set on Cloud Run.
   # The deploy step converts this block to a | delimited list using
@@ -59,10 +67,10 @@ substitutions:
     REQUIRE_TEAM_LEAD=false
     MAX_IMAGE_SIZE_BYTES=1MB
     DEFAULT_TEAM_CONTACT_ADDRESS=team@example.com
-    POSTGRES_HOST=10.112.224.3
-    POSTGRES_USER=postgres
-    POSTGRES_DB=volunteer-next
-    POSTGRES_PORT=5432
+    POSTGRES_HOST=${_DB_HOST}
+    POSTGRES_USER=${_DB_USER}
+    POSTGRES_DB=${_DB_NAME}
+    POSTGRES_PORT=${_DB_PORT}
     PRETIX_REQUIRE_VALID_TICKET=true
     PRETIX_API_BASE_URL=https://tickets.wildfireretreat.org
     PRETIX_REQUIRED_ITEM_IDS=gen_admit_pre,gen_admit_Tier1,gen_admit_Tier2,gen_admit_Tier3,gen_admit_mgr,gen_admit_kids
@@ -116,6 +124,26 @@ steps:
           npm test
         else
           echo "Skipping tests because _RUN_TESTS=${_RUN_TESTS}"
+        fi
+
+  - id: Run DB migrations (optional)
+    name: liquibase/liquibase
+    entrypoint: bash
+    secretEnv:
+      - POSTGRES_PASSWORD
+    args:
+      - -ceu
+      - |
+        if [[ "${_RUN_MIGRATIONS}" == "true" ]]; then
+          liquibase \
+            --classpath=/workspace/db/drivers/postgresql.jar \
+            --url="jdbc:postgresql://${_DB_HOST}:${_DB_PORT}/${_DB_NAME}" \
+            --changeLogFile=/workspace/db/changelog.xml \
+            --username="${_DB_USER}" \
+            --password="$$POSTGRES_PASSWORD" \
+            update
+        else
+          echo "Skipping migrations because _RUN_MIGRATIONS=${_RUN_MIGRATIONS}"
         fi
 
   - id: Build image
@@ -224,3 +252,8 @@ steps:
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/${_DB_PASSWORD_SECRET}/versions/${_DB_PASSWORD_SECRET_VERSION}
+      env: POSTGRES_PASSWORD
