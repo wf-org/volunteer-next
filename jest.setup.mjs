@@ -1,6 +1,16 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }) => children
+}));
+
+jest.mock('remark-gfm', () => ({
+  __esModule: true,
+  default: () => undefined
+}));
+
 // Polyfill for Web APIs that Next.js requires but aren't available in Node.js test environment
 if (typeof globalThis.Request === 'undefined') {
   globalThis.Request = class Request {

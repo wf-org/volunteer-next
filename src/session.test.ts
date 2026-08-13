@@ -249,7 +249,7 @@ describe('getCurrentEvent', () => {
   });
 
   it('should return the event if x-event-id header is present', async () => {
-    const mockEvent = { id: 'event-id', name: 'Test Event' };
+    const mockEvent = { id: 'event-id', slug: 'my-event' };
     mockHeaders.mockResolvedValueOnce(new Headers({ 'x-event-id': 'event-id' }));
     mockGetEventsById.mockResolvedValueOnce([mockEvent] as never);
 
@@ -274,7 +274,7 @@ describe('getCurrentEventOrRedirect', () => {
   });
 
   it('should return the event if found', async () => {
-    const mockEvent = { id: 'event-id', name: 'Test Event' };
+    const mockEvent = { id: 'event-id', slug: 'my-event' };
     mockHeaders.mockResolvedValueOnce(new Headers({ 'x-event-id': 'event-id' }));
     mockGetEventsById.mockResolvedValueOnce([mockEvent] as never);
 
