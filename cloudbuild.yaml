@@ -4,8 +4,8 @@
 # 1) Installs dependencies
 # 2) Runs typecheck
 # 3) Optionally runs tests
-# 4) Runs DB migrations (Cloud Run init-container equivalent)
-# 5) Builds and pushes Docker images to Artifact Registry
+# 4) Builds and pushes Docker images to Artifact Registry
+# 5) Runs Liquibase migrations
 # 6) Deploys to Cloud Run
 #
 # Recommended trigger: GitHub push to main branch.
@@ -13,6 +13,7 @@
 # Required IAM for Cloud Build execution service account:
 # - roles/artifactregistry.writer
 # - roles/logging.logWriter
+# - roles/secretmanager.secretAccessor (for build-time Liquibase DB password)
 # - roles/iam.serviceAccountTokenCreator on _DEPLOYER_SERVICE_ACCOUNT
 #
 # Required IAM for deployer service account (_DEPLOYER_SERVICE_ACCOUNT):
@@ -33,12 +34,6 @@ substitutions:
   _SERVICE_NAME: volunteer-next
   _REGION: us-east1
   _REPOSITORY: containers
-  _DB_HOST: '10.112.224.3'
-  _DB_PORT: '5432'
-  _DB_NAME: 'volunteer-next'
-  _DB_USER: 'postgres'
-  _DB_PASSWORD_SECRET: 'POSTGRES_PASSWORD'
-  _DB_PASSWORD_SECRET_VERSION: 'latest'
   _RUNTIME_SERVICE_ACCOUNT: 'volunteer-next-runtime@wildfire-504616.iam.gserviceaccount.com'
   # Optional: service account used only for deploy API calls.
   # If empty, deploy runs as the Cloud Build execution identity.
@@ -55,7 +50,12 @@ substitutions:
   _ALLOW_UNAUTH: 'true'
   _RUN_TYPECHECK: 'false'
   _RUN_TESTS: 'false'
-  _RUN_MIGRATIONS: 'true'
+
+  # Database connection used by Liquibase during build.
+  _POSTGRES_HOST: '10.112.224.3'
+  _POSTGRES_USER: 'postgres'
+  _POSTGRES_DB: 'volunteer-next'
+  _POSTGRES_PORT: '5432'
 
   # Newline-separated KEY=VALUE values to set on Cloud Run.
   # The deploy step converts this block to a | delimited list using
@@ -67,10 +67,10 @@ substitutions:
     REQUIRE_TEAM_LEAD=false
     MAX_IMAGE_SIZE_BYTES=1MB
     DEFAULT_TEAM_CONTACT_ADDRESS=team@example.com
-    POSTGRES_HOST=${_DB_HOST}
-    POSTGRES_USER=${_DB_USER}
-    POSTGRES_DB=${_DB_NAME}
-    POSTGRES_PORT=${_DB_PORT}
+    POSTGRES_HOST=10.112.224.3
+    POSTGRES_USER=postgres
+    POSTGRES_DB=volunteer-next
+    POSTGRES_PORT=5432
     PRETIX_REQUIRE_VALID_TICKET=true
     PRETIX_API_BASE_URL=https://tickets.wildfireretreat.org
     PRETIX_REQUIRED_ITEM_IDS=gen_admit_pre,gen_admit_Tier1,gen_admit_Tier2,gen_admit_Tier3,gen_admit_mgr,gen_admit_kids
@@ -126,48 +126,6 @@ steps:
           echo "Skipping tests because _RUN_TESTS=${_RUN_TESTS}"
         fi
 
-  - id: Run DB migrations (optional)
-    name: liquibase/liquibase
-    entrypoint: bash
-    secretEnv:
-      - POSTGRES_PASSWORD
-    args:
-      - -ceu
-      - |
-        set -o pipefail
-
-        if [[ "${_RUN_MIGRATIONS}" == "true" ]]; then
-          LOG_FILE=/workspace/liquibase-migration.log
-
-          echo "Starting Liquibase migration"
-          echo "DB host: ${_DB_HOST}"
-          echo "DB port: ${_DB_PORT}"
-          echo "DB name: ${_DB_NAME}"
-          echo "DB user: ${_DB_USER}"
-          echo "Changelog: /workspace/db/changelog.xml"
-
-          liquibase \
-            --classpath=/workspace/db/drivers/postgresql.jar \
-            --url="jdbc:postgresql://${_DB_HOST}:${_DB_PORT}/${_DB_NAME}" \
-            --changeLogFile=/workspace/db/changelog.xml \
-            --username="${_DB_USER}" \
-            --password="$$POSTGRES_PASSWORD" \
-            --log-level=info \
-            update 2>&1 | tee "$$LOG_FILE"
-
-          status=$${PIPESTATUS[0]}
-          if [[ "$$status" -ne 0 ]]; then
-            echo "Liquibase migration failed with exit code $$status"
-            echo "--- Liquibase log tail ---"
-            tail -n 200 "$$LOG_FILE" || true
-            exit "$$status"
-          fi
-
-          echo "Liquibase migration completed successfully"
-        else
-          echo "Skipping migrations because _RUN_MIGRATIONS=${_RUN_MIGRATIONS}"
-        fi
-
   - id: Build image
     name: gcr.io/cloud-builders/docker
     args:
@@ -191,6 +149,61 @@ steps:
     args:
       - push
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest
+
+  - id: Build migrations image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.liquibase
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}-migrations:latest
+      - .
+
+  - id: Push latest migrations image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}-migrations:latest
+
+
+  - id: Run Liquibase migrations
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    secretEnv:
+      - POSTGRES_PASSWORD
+    args:
+      - -ceu
+      - |
+        set -o pipefail
+
+        if [[ -z "${_SERVICE_NAME}" || -z "${_REGION}" || -z "${_REPOSITORY}" || -z "${_POSTGRES_HOST}" || -z "${_POSTGRES_PORT}" || -z "${_POSTGRES_DB}" || -z "${_POSTGRES_USER}" ]]; then
+          echo "ERROR: One or more required substitutions are empty (_SERVICE_NAME, _REGION, _REPOSITORY, _POSTGRES_HOST, _POSTGRES_PORT, _POSTGRES_DB, _POSTGRES_USER)." >&2
+          exit 1
+        fi
+
+        IMPERSONATE_ARGS=()
+        if [[ -n "${_DEPLOYER_SERVICE_ACCOUNT}" ]]; then
+          IMPERSONATE_ARGS+=(--impersonate-service-account "${_DEPLOYER_SERVICE_ACCOUNT}")
+        fi
+
+        JOB_NAME="${_SERVICE_NAME}-migrations"
+        JOB_IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}-migrations:latest"
+
+        gcloud "$${IMPERSONATE_ARGS[@]}" run jobs deploy "$$JOB_NAME" \
+          --project "$PROJECT_ID" \
+          --image "$$JOB_IMAGE" \
+          --region "${_REGION}" \
+          --command=liquibase \
+          --args="--classpath=/liquibase/lib/postgresql.jar,--url=jdbc:postgresql://${_POSTGRES_HOST}:${_POSTGRES_PORT}/${_POSTGRES_DB},--changeLogFile=changelog.xml,--username=${_POSTGRES_USER},--password=$$POSTGRES_PASSWORD,update" \
+          --set-secrets="POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest" \
+          --quiet
+
+        gcloud "$${IMPERSONATE_ARGS[@]}" run jobs execute "$$JOB_NAME" \
+          --project "$PROJECT_ID" \
+          --region "${_REGION}" \
+          --wait \
+          --quiet
 
   - id: Deploy to Cloud Run
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
@@ -271,11 +284,11 @@ steps:
         echo "Runtime SA: $$RUNTIME_SA"
         "$${CMD[@]}"
 
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/POSTGRES_PASSWORD/versions/latest
+      env: POSTGRES_PASSWORD
+
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:$SHORT_SHA
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE_NAME}:latest
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/${_DB_PASSWORD_SECRET}/versions/${_DB_PASSWORD_SECRET_VERSION}
-      env: POSTGRES_PASSWORD
