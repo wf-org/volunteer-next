@@ -30,11 +30,13 @@ interface Props {
   onSignup?: () => void;
   onCancel?: () => void;
   eventStartDate?: Date;
+  timeFormat?: '12h' | '24h';
 }
 
 export default function ShiftCard({
   shift,
   eventStartDate,
+  timeFormat,
   volunteers,
   qualifications = [],
   onEdit,
@@ -86,7 +88,7 @@ export default function ShiftCard({
                   <Markdown content={shift.description} />
                 </Text>
               )}
-              <TimeSpan start={startTime} end={endTime} />
+              <TimeSpan start={startTime} end={endTime} timeFormat={timeFormat} />
             </Flex>
             {/* Spots and Signup */}
             <Flex

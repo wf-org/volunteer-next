@@ -93,6 +93,7 @@ export default function ShiftOverviewList({
                     return (
                       <ShiftCard
                         eventStartDate={event.startDate}
+                        timeFormat={event.timeFormat}
                         shift={shift}
                         qualifications={requiredQualifications}
                         volunteers={shiftVolunteers[shift.id] ?? []}

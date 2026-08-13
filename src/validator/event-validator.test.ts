@@ -17,6 +17,7 @@ describe('Event Validator', () => {
         slug: 'test-event',
         startDate: new Date('2025-12-01'),
         endDate: new Date('2025-12-05'),
+        timeFormat: '24h',
         requiredVolunteerHours: 12
       });
     });
@@ -87,6 +88,31 @@ describe('Event Validator', () => {
       const result = validateNewEvent(formData);
 
       expect(result.requiredVolunteerHours).toBe(0);
+      expect(result.timeFormat).toBe('24h');
+    });
+
+    it('accepts 12h time format when provided', () => {
+      const formData = new FormData();
+      formData.set('name', 'Test Event');
+      formData.set('slug', 'test-event');
+      formData.set('startDate', '2025-12-01');
+      formData.set('endDate', '2025-12-05');
+      formData.set('timeFormat', '12h');
+
+      const result = validateNewEvent(formData);
+
+      expect(result.timeFormat).toBe('12h');
+    });
+
+    it('throws an error if timeFormat is invalid', () => {
+      const formData = new FormData();
+      formData.set('name', 'Test Event');
+      formData.set('slug', 'test-event');
+      formData.set('startDate', '2025-12-01');
+      formData.set('endDate', '2025-12-05');
+      formData.set('timeFormat', 'bad-format');
+
+      expect(() => validateNewEvent(formData)).toThrow('Time format must be either 12h or 24h');
     });
 
     it('throws an error if requiredVolunteerHours is invalid', () => {
@@ -121,6 +147,7 @@ describe('Event Validator', () => {
         slug: 'test-event',
         startDate: new Date('2025-12-01'),
         endDate: new Date('2025-12-05'),
+        timeFormat: '24h',
         requiredVolunteerHours: 8
       });
     });

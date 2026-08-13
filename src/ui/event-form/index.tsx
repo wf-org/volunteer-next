@@ -127,6 +127,19 @@ export default function EventForm({
             />
           </FormField>
           <FormField
+            name={t('timeFormat')}
+            description={t('timeFormatDescription')}
+            ariaId="time-format-label"
+          >
+            <Select.Root required name="timeFormat" defaultValue={editingEvent?.timeFormat ?? '24h'}>
+              <Select.Trigger aria-labelledby="time-format-label" />
+              <Select.Content>
+                <Select.Item value="24h">{t('timeFormat24h')}</Select.Item>
+                <Select.Item value="12h">{t('timeFormat12h')}</Select.Item>
+              </Select.Content>
+            </Select.Root>
+          </FormField>
+          <FormField
             name={t('eventOrganiser')}
             description={t('eventOrganiserDescription')}
             ariaId="event-organiser-label"

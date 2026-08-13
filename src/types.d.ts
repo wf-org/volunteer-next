@@ -87,6 +87,7 @@ declare global {
     slug: UrlSlug;
     startDate: Date;
     endDate: Date;
+    timeFormat?: '12h' | '24h';
     requiredVolunteerHours?: number;
     archived?: boolean;
     logo?: string;

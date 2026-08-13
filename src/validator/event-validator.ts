@@ -65,9 +65,13 @@ export const validateNewEvent = (data: FormData): Omit<EventInfo, 'id'> => {
   const requiredVolunteerHoursRaw = data.get('requiredVolunteerHours')?.toString().trim() ?? '';
   const requiredVolunteerHours =
     requiredVolunteerHoursRaw.length === 0 ? 0 : Number(requiredVolunteerHoursRaw);
+  const timeFormat = data.get('timeFormat')?.toString() ?? '24h';
 
   if (!Number.isInteger(requiredVolunteerHours) || requiredVolunteerHours < 0) {
     throw new Error('Required volunteer hours must be a non-negative integer');
+  }
+  if (timeFormat !== '12h' && timeFormat !== '24h') {
+    throw new Error('Time format must be either 12h or 24h');
   }
 
   return {
@@ -75,6 +79,7 @@ export const validateNewEvent = (data: FormData): Omit<EventInfo, 'id'> => {
     name,
     startDate,
     endDate,
+    timeFormat,
     requiredVolunteerHours,
     logo,
     logoDark,
