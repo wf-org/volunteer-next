@@ -134,14 +134,36 @@ steps:
     args:
       - -ceu
       - |
+        set -o pipefail
+
         if [[ "${_RUN_MIGRATIONS}" == "true" ]]; then
+          LOG_FILE=/workspace/liquibase-migration.log
+
+          echo "Starting Liquibase migration"
+          echo "DB host: ${_DB_HOST}"
+          echo "DB port: ${_DB_PORT}"
+          echo "DB name: ${_DB_NAME}"
+          echo "DB user: ${_DB_USER}"
+          echo "Changelog: /workspace/db/changelog.xml"
+
           liquibase \
             --classpath=/workspace/db/drivers/postgresql.jar \
             --url="jdbc:postgresql://${_DB_HOST}:${_DB_PORT}/${_DB_NAME}" \
             --changeLogFile=/workspace/db/changelog.xml \
             --username="${_DB_USER}" \
             --password="$$POSTGRES_PASSWORD" \
-            update
+            --log-level=info \
+            update 2>&1 | tee "$$LOG_FILE"
+
+          status=$${PIPESTATUS[0]}
+          if [[ "$$status" -ne 0 ]]; then
+            echo "Liquibase migration failed with exit code $$status"
+            echo "--- Liquibase log tail ---"
+            tail -n 200 "$$LOG_FILE" || true
+            exit "$$status"
+          fi
+
+          echo "Liquibase migration completed successfully"
         else
           echo "Skipping migrations because _RUN_MIGRATIONS=${_RUN_MIGRATIONS}"
         fi
