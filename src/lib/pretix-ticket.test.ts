@@ -1,4 +1,8 @@
-import { hasValidPretixTicketForEvent, isPretixTicketCheckEnabled } from './pretix-ticket';
+import {
+  getPretixAttendeesForEvent,
+  hasValidPretixTicketForEvent,
+  isPretixTicketCheckEnabled
+} from './pretix-ticket';
 
 describe('pretix-ticket', () => {
   const originalEnv = process.env;
@@ -257,5 +261,94 @@ describe('pretix-ticket', () => {
     const result = await hasValidPretixTicketForEvent('person@example.org', 'my-event');
 
     expect(result).toBe(true);
+  });
+
+  it('returns unique attendees across paginated paid orders', async () => {
+    process.env.PRETIX_API_TOKEN = 'token';
+    process.env.PRETIX_ORGANIZER = 'org';
+    process.env.PRETIX_API_BASE_URL = 'https://tickets.example.org';
+
+    const fetchSpy = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [
+            {
+              status: 'p',
+              testmode: false,
+              positions: [
+                {
+                  canceled: false,
+                  attendee_email: 'person@example.org',
+                  attendee_name: 'Person One'
+                }
+              ]
+            }
+          ],
+          next: 'https://tickets.example.org/api/v1/organizers/org/events/my-event/orders/?page=2'
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [
+            {
+              status: 'p',
+              testmode: false,
+              positions: [
+                {
+                  canceled: false,
+                  attendee_email: 'person@example.org'
+                },
+                {
+                  canceled: false,
+                  attendee_email: 'other@example.org',
+                  attendee_name: 'Other Person'
+                }
+              ]
+            }
+          ],
+          next: null
+        })
+      });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await getPretixAttendeesForEvent('my-event');
+
+    expect(result).toEqual([
+      { email: 'person@example.org', name: 'Person One' },
+      { email: 'other@example.org', name: 'Other Person' }
+    ]);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('filters attendees by PRETIX_REQUIRED_ITEM_IDS when configured', async () => {
+    process.env.PRETIX_API_TOKEN = 'token';
+    process.env.PRETIX_ORGANIZER = 'org';
+    process.env.PRETIX_API_BASE_URL = 'https://tickets.example.org';
+    process.env.PRETIX_REQUIRED_ITEM_IDS = '42';
+
+    const fetchSpy = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            status: 'p',
+            testmode: false,
+            positions: [
+              { canceled: false, item: 7, attendee_email: 'skip@example.org' },
+              { canceled: false, item: 42, attendee_email: 'keep@example.org' }
+            ]
+          }
+        ],
+        next: null
+      })
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await getPretixAttendeesForEvent('my-event');
+
+    expect(result).toEqual([{ email: 'keep@example.org', name: undefined }]);
   });
 });

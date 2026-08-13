@@ -16,11 +16,18 @@ type PretixOrder = {
   secret?: string;
   status?: string;
   testmode?: boolean;
+  email?: string;
   positions?: Array<{
     canceled?: boolean;
     item?: number;
     attendee_email?: string;
+    attendee_name?: string;
   }>;
+};
+
+export type PretixAttendee = {
+  email: string;
+  name?: string;
 };
 
 const cleanEnvValue = (value: string | undefined): string | undefined => {
@@ -98,6 +105,16 @@ const buildOrdersUrl = (config: PretixConfig, eventSlug: UrlSlug, email: string)
   return url;
 };
 
+const buildEventOrdersUrl = (config: PretixConfig, eventSlug: UrlSlug, next?: string): URL => {
+  if (next) {
+    return new URL(next);
+  }
+  const endpoint = `${config.apiBaseUrl}/api/v1/organizers/${encodeURIComponent(config.organizer)}/events/${encodeURIComponent(eventSlug)}/orders/`;
+  const url = new URL(endpoint);
+  url.searchParams.set('status', 'p');
+  return url;
+};
+
 const getRequiredPretixItemIds = (): Set<number> => {
   const raw = cleanEnvValue(process.env.PRETIX_REQUIRED_ITEM_IDS);
   if (!raw) {
@@ -162,6 +179,50 @@ const evaluateOrderTicketState = (
   }
 
   return false;
+};
+
+const normaliseName = (name: string | undefined | null): string | undefined => {
+  if (!name) {
+    return undefined;
+  }
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const toOrderAttendees = (order: PretixOrder, requiredItemIds: Set<number>): PretixAttendee[] => {
+  if (order.testmode === true) {
+    return [];
+  }
+  if (order.status && order.status !== 'p') {
+    return [];
+  }
+
+  const activePositions = (order.positions ?? []).filter((position) => position.canceled !== true);
+  if (activePositions.length === 0) {
+    return [];
+  }
+
+  const positions =
+    requiredItemIds.size > 0
+      ? activePositions.filter((position) =>
+          typeof position.item === 'number' ? requiredItemIds.has(position.item) : false
+        )
+      : activePositions;
+
+  const attendees = positions
+    .map((position) => {
+      const email = normaliseEmail(position.attendee_email ?? order.email);
+      if (!email) {
+        return null;
+      }
+      return {
+        email,
+        name: normaliseName(position.attendee_name)
+      } as PretixAttendee;
+    })
+    .filter((attendee): attendee is PretixAttendee => attendee !== null);
+
+  return attendees;
 };
 
 /**
@@ -230,4 +291,61 @@ export const hasValidPretixTicketForEvent = async (
     );
     return false;
   }
+};
+
+/**
+ * Retrieves all paid attendees for an event from Pretix.
+ */
+export const getPretixAttendeesForEvent = async (eventSlug: UrlSlug): Promise<PretixAttendee[]> => {
+  const config = getPretixConfig();
+  const requiredItemIds = getRequiredPretixItemIds();
+  if (!config) {
+    throw new Error('Pretix config is incomplete');
+  }
+
+  const attendeesByEmail = new Map<string, PretixAttendee>();
+  let nextUrl: string | undefined;
+  let pageCount = 0;
+
+  do {
+    const url = buildEventOrdersUrl(config, eventSlug, nextUrl);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Token ${config.apiToken}`,
+        Accept: 'application/json'
+      },
+      cache: 'no-store'
+    });
+
+    if (!response.ok) {
+      throw new Error(`Pretix API returned ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      results?: PretixOrder[];
+      next?: string | null;
+    };
+
+    for (const order of data.results ?? []) {
+      for (const attendee of toOrderAttendees(order, requiredItemIds)) {
+        const existing = attendeesByEmail.get(attendee.email);
+        if (!existing) {
+          attendeesByEmail.set(attendee.email, attendee);
+          continue;
+        }
+        if (!existing.name && attendee.name) {
+          attendeesByEmail.set(attendee.email, attendee);
+        }
+      }
+    }
+
+    nextUrl = data.next ?? undefined;
+    pageCount += 1;
+    if (pageCount > 200) {
+      throw new Error('Pretix pagination exceeded safety limit');
+    }
+  } while (nextUrl);
+
+  return Array.from(attendeesByEmail.values());
 };

@@ -177,6 +177,13 @@
   "UsersDashboardPage": {
     "title": "All Volunteers",
     "createUser": "Create new user",
+    "importVolunteers": "Import all attendees",
+    "importVolunteersPending": "Importing attendees...",
+    "importVolunteersProcessingHint": "Please wait while attendee records are imported.",
+    "importVolunteersSuccessTitle": "Attendee import complete",
+    "importVolunteersSuccessMessage": "Processed {attendeeCount} attendee(s): created {createdCount}, updated {updatedCount}, restored {undeletedCount}.",
+    "importVolunteersFailureTitle": "Attendee import failed",
+    "importVolunteersFailureMessage": "Something went wrong while importing attendees. Check server logs and try again.",
     "confirmDeletion": "Confirm deletion",
     "confirmDeleteText": "Are you sure you want to delete \"{userName}\"? The record will be permanently deleted after 30 days.",
     "undelete": "Undelete",
