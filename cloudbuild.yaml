@@ -179,7 +179,7 @@ steps:
       - |
         set -o pipefail
 
-        if [[ -z "${_SERVICE_NAME}" || -z "${_REGION}" || -z "${_REPOSITORY}" || -z "$POSTGRES_HOST" || -z "$POSTGRES_PORT" || -z "$POSTGRES_DB" || -z "$POSTGRES_USER" ]]; then
+        if [[ -z "${_SERVICE_NAME}" || -z "${_REGION}" || -z "${_REPOSITORY}" || -z "$$POSTGRES_HOST" || -z "$$POSTGRES_PORT" || -z "$$POSTGRES_DB" || -z "$$POSTGRES_USER" ]]; then
           echo "ERROR: One or more required substitutions are empty (_SERVICE_NAME, _REGION, _REPOSITORY, _POSTGRES_HOST, _POSTGRES_PORT, _POSTGRES_DB, _POSTGRES_USER)." >&2
           exit 1
         fi
@@ -195,7 +195,7 @@ steps:
         if [[ -z "$$JOB_SERVICE_ACCOUNT" ]]; then
           JOB_SERVICE_ACCOUNT="${_SERVICE_NAME}-runner@$PROJECT_ID.iam.gserviceaccount.com"
         fi
-        JOB_CMD='liquibase --classpath=/liquibase/lib/postgresql.jar --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB --changeLogFile=changelog.xml --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD update'
+        JOB_CMD='liquibase --classpath=/liquibase/lib/postgresql.jar --url=jdbc:postgresql://$$POSTGRES_HOST:$$POSTGRES_PORT/$$POSTGRES_DB --changeLogFile=changelog.xml --username=$$POSTGRES_USER --password=$$POSTGRES_PASSWORD update'
 
         gcloud "$${IMPERSONATE_ARGS[@]}" run jobs deploy "$$JOB_NAME" \
           --project "$PROJECT_ID" \
@@ -204,7 +204,7 @@ steps:
           --service-account "$$JOB_SERVICE_ACCOUNT" \
           --command=sh \
           --args="-ceu,$$JOB_CMD" \
-          --set-env-vars="POSTGRES_HOST=$POSTGRES_HOST,POSTGRES_PORT=$POSTGRES_PORT,POSTGRES_DB=$POSTGRES_DB,POSTGRES_USER=$POSTGRES_USER" \
+          --set-env-vars="POSTGRES_HOST=$$POSTGRES_HOST,POSTGRES_PORT=$$POSTGRES_PORT,POSTGRES_DB=$$POSTGRES_DB,POSTGRES_USER=$$POSTGRES_USER" \
           --set-secrets="POSTGRES_PASSWORD=POSTGRES_PASSWORD:latest" \
           --quiet
 
