@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
-import fs from 'node:fs/promises';
 import path from 'node:path';
+import { contentTypeFor, readUpload } from '@/lib/uploads';
 
 export const GET = async (
   request: NextRequest,
@@ -10,26 +10,13 @@ export const GET = async (
   if (filename !== path.basename(filename)) {
     return new Response('Invalid filename', { status: 400 });
   }
-  const filePath = path.join(process.cwd(), 'uploads', filename);
   try {
-    const fileBuffer = await fs.readFile(filePath);
-    const fileExt = path.extname(filename).toLowerCase();
-    let contentType = 'application/octet-stream';
-    if (fileExt === '.jpg' || fileExt === '.jpeg') {
-      contentType = 'image/jpeg';
-    } else if (fileExt === '.png') {
-      contentType = 'image/png';
-    } else if (fileExt === '.gif') {
-      contentType = 'image/gif';
-    } else if (fileExt === '.svg') {
-      contentType = 'image/svg+xml';
-    } else if (fileExt === '.webp') {
-      contentType = 'image/webp';
-    } else if (fileExt === '.ico') {
-      contentType = 'image/x-icon';
+    const file = await readUpload(filename);
+    if (!file) {
+      return new Response('File not found', { status: 404 });
     }
-    return new Response(fileBuffer, {
-      headers: { 'Content-Type': contentType }
+    return new Response(Buffer.from(file), {
+      headers: { 'Content-Type': contentTypeFor(filename) }
     });
   } catch (error) {
     console.error('Error reading file:', error);

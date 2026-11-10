@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import path from 'path';
-import fs from 'fs/promises';
+import { saveUpload } from '@/lib/uploads';
 
 const MAX_IMAGE_SIZE_BYTES = Number(process.env.MAX_IMAGE_SIZE_BYTES) || 5 * 1024 * 1024; // Default to 5MB if not set
 const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.ico']);
@@ -24,7 +24,6 @@ export async function uploadImageAction(file: File): Promise<string> {
 
   const destinationName = randomUUID() + extension;
   const buffer = Buffer.from(await file.arrayBuffer());
-  await fs.mkdir(path.join(process.cwd(), 'uploads'), { recursive: true });
-  await fs.writeFile(path.join(process.cwd(), 'uploads', destinationName), buffer);
+  await saveUpload(destinationName, buffer);
   return destinationName;
 }

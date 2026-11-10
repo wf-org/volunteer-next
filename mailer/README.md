@@ -23,3 +23,8 @@ The service requires the following environment variables:
 | SMTP_FROM         | Address to send mail from                           | SMTP_USER \|\| noreply@localhost |
 | FAKE_SEND         | Debug flag to log instead of actually sending email | false                            |
 | MAX_RETRIES       | Maximum retry attemps for failed emails             | 3                                |
+
+## Running
+
+- **docker compose**: the default image stage (`runner`) runs `index.ts`, which sends one batch of `RATE_LIMIT` emails on each `CRON_SCHEDULE` tick.
+- **AWS Lambda**: the `lambda` stage (`docker build --target lambda`) runs `lambda.handler`, which sends batches of `RATE_LIMIT` until the queue is empty, a batch sends nothing, or less than 30 seconds of the function timeout remain. EventBridge Scheduler and the web app (`MAILER_FUNCTION`) invoke it, so `CRON_SCHEDULE` is unused.

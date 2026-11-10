@@ -3,6 +3,7 @@ import type { body as NotifyEmail } from './NotifyEmail';
 import { htmlToText } from 'html-to-text';
 import { sendEmail } from '@/email';
 import { queueEmail } from '@/service/email-service';
+import { startMailer } from '@/email/mailer';
 
 type Templates = {
   ShiftEmail: typeof ShiftEmail;
@@ -18,6 +19,8 @@ export async function sendEmailWithTemplate<T extends TemplateName>(options: {
   props: TemplateProps<T>;
   key?: string;
   sendAfter?: Date;
+  /** Start the mailer after queueing (default true); bulk senders pass false and call startMailer once */
+  startMailer?: boolean;
 }): Promise<SendEmailResult> {
   // dynamically import renderToStaticMarkup because NextJS gets angry otherwise (https://github.com/vercel/next.js/issues/43810#issuecomment-1341136525)
   const renderToStaticMarkup = (await import('react-dom/server')).renderToStaticMarkup;
@@ -32,6 +35,9 @@ export async function sendEmailWithTemplate<T extends TemplateName>(options: {
       key: options.key,
       sendAfter: options.sendAfter
     });
+    if (options.startMailer !== false) {
+      await startMailer();
+    }
     return { status: 'queued' };
   } else {
     return sendEmail({
