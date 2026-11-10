@@ -1,0 +1,6 @@
+# SOPS encrypts secrets.* with the shared stack's KMS key (stacks/000-shared,
+# module.sops_key). Edit a file with `sops <file>`; anyone who may kms:Decrypt
+# the key can read it.
+creation_rules:
+  - path_regex: ^deploy/.*/secrets
+    kms: arn:aws:kms:us-east-1:413368852420:alias/sops
