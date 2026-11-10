@@ -8,6 +8,8 @@ BETTER_AUTH_URL=ssm:/volunteer-next/BETTER_AUTH_URL
 # Auth mode: oauth (Pretix/OAuth) or credentials (email/password). Defaults to oauth.
 AUTH_MODE=oauth
 
+UPLOADS_BUCKET=ssm:/volunteer-next/UPLOADS_BUCKET
+
 # Turnstile configuration
 # TURNSTILE_SITE_KEY=<Your Turnstile site key here>
 # TURNSTILE_SECRET_KEY=<Your Turnstile secret key here>
