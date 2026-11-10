@@ -65,7 +65,8 @@ APP_NAME=volunteer-next
 # USE_EMAIL_QUEUE=<Whether to use the email queue for sending emails (true/false)>
 MAX_IMAGE_SIZE_BYTES=1MB
 DEFAULT_TEAM_CONTACT_ADDRESS=team@example.com
-REQUIRE_TEAM_LEAD=false #<Whether a team lead is required for each Team. Defaults to true.>
+#<Whether a team lead is required for each Team. Defaults to true.>
+REQUIRE_TEAM_LEAD=false 
 
 # Debugging flags
 # DEFAULT_THEME=<Default theme to use: system | light | dark>

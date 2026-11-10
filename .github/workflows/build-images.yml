@@ -162,10 +162,15 @@ jobs:
           cat result.json; echo
           if jq -e '.FunctionError' invoke.json > /dev/null; then exit 1; fi
 
-      # Environment = deploy/prod/env + deploy/prod/env.secrets.enc (SOPS, KMS
-      # alias/sops). It replaces the web function's whole environment.
+      # Secrets in deploy/prod/env.secrets.enc (SOPS, KMS alias/sops) go to
+      # Parameter Store as SecureStrings <SSM_PATH>/<KEY>. The web function gets
+      # deploy/prod/env plus KEY=ssm:<SSM_PATH>/<KEY> for each secret, which
+      # src/instrumentation.ts resolves at startup. This replaces the function's
+      # whole environment.
       - name: Web function environment
         id: web-env
+        env:
+          SSM_PATH: /volunteer-next
         run: |
           set -euo pipefail
           umask 077
@@ -210,13 +215,30 @@ jobs:
             { echo "::error::No secrets found in env.secrets.enc"; exit 1; }
           env_to_json deploy/prod/env "$plain_json"
 
-          jq -r --slurpfile secrets "$secrets_json" \
-            'keys[] | select(. as $k | $secrets[0] | has($k))' "$plain_json" |
+          jq -r 'keys[]' "$secrets_json" | while IFS= read -r key; do
+            # Value goes in on stdin, not the command line
+            jq --arg key "$key" --arg name "$SSM_PATH/$key" \
+              '{Name: $name, Value: .[$key], Type: "SecureString", Overwrite: true}' "$secrets_json" |
+              aws ssm put-parameter --cli-input-json file:///dev/stdin --output text > /dev/null
+            echo "stored $SSM_PATH/$key"
+          done
+          refs=$(jq -c --arg prefix "ssm:$SSM_PATH/" 'with_entries(.value = $prefix + .key)' "$secrets_json")
+
+          jq -r --argjson refs "$refs" \
+            'to_entries[] | select(.key as $k | .value as $v | $refs | has($k) and .[$k] != $v) | .key' "$plain_json" |
             while IFS= read -r key; do
               echo "::warning::$key is in both deploy/prod/env and env.secrets.enc; using the secret"
             done
+          environment=$(jq -c --argjson refs "$refs" '. + $refs' "$plain_json")
 
-          environment=$(jq -cs '.[0] + .[1]' "$plain_json" "$secrets_json")
+          # Fail here rather than at the function's startup when a reference
+          # points at a parameter that doesn't exist (GetParameters takes 10 names)
+          missing=$(jq -r '.[] | select(startswith("ssm:")) | ltrimstr("ssm:")' <<< "$environment" |
+            sort -u | xargs -r -n 10 aws ssm get-parameters --query 'InvalidParameters' --output text --names |
+            tr -s '[:space:]' '\n' | grep -vx -e '' -e None | tr '\n' ' ' || true)
+          missing="${missing# }"; missing="${missing% }"
+          [ -z "$missing" ] || { echo "::error::Missing from Parameter Store: $missing"; exit 1; }
+
           echo "Setting: $(jq -r 'keys | join(" ")' <<< "$environment")"
           echo "environment=$environment" >> "$GITHUB_OUTPUT"
 
