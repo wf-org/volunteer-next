@@ -1,9 +1,9 @@
 import metadata from '@/i18n/metadata';
 import { redirect } from 'next/navigation';
-import { Flex, Heading, Card } from '@radix-ui/themes';
+import { Flex, Heading, Card, Text } from '@radix-ui/themes';
 import { getTranslations } from 'next-intl/server';
-import { createEvent } from '@/service/event-service';
-import { addRoleToUsers, getUsers } from '@/service/user-service';
+import { cloneEventStructure, createEvent, getEventsById } from '@/service/event-service';
+import { addRoleToUsers, getUsers, getUsersWithRole } from '@/service/user-service';
 import { checkAuthorisation, currentUser } from '@/session';
 import { inTransaction } from '@/db';
 import EventForm from '@/ui/event-form';
@@ -18,7 +18,7 @@ const PAGE_KEY = 'CreateEventPage';
 
 export const generateMetadata = metadata(PAGE_KEY);
 
-export default async function CreateEvent() {
+export default async function CreateEvent({ searchParams }: PageProps<'/create-event'>) {
   const onSubmit = async (data: FormData) => {
     'use server';
 
@@ -26,10 +26,17 @@ export default async function CreateEvent() {
 
     const newEvent = validateNewEvent(data);
     const organiser = validateUserIds(data, 'organiserId')[0]; // Only single organiser supported for now
+    const cloneFromId = data.get('cloneFromId')?.toString() || undefined;
+    if (cloneFromId && !(await getEventsById([cloneFromId]))[0]) {
+      throw new Error('Event to clone not found');
+    }
 
     await inTransaction(async (client) => {
       const createdEvent = await createEvent(newEvent, client);
       await addRoleToUsers({ type: 'organiser', eventId: createdEvent.id }, [organiser], client);
+      if (cloneFromId) {
+        await cloneEventStructure(cloneFromId, createdEvent.id, client);
+      }
     });
     redirect(getEventsPath());
   };
@@ -40,9 +47,18 @@ export default async function CreateEvent() {
   const volunteers = usersToVolunteers(await getUsers(), permissionsProfile);
   const maxImageSizeBytes = getMaxImageSizeBytes();
 
+  const { from } = await searchParams;
+  const cloneFromId = typeof from === 'string' ? from : undefined;
+  const cloneSource = cloneFromId ? (await getEventsById([cloneFromId]))[0] : undefined;
+  const cloneOrganiserId = cloneSource
+    ? (await getUsersWithRole({ type: 'organiser', eventId: cloneSource.id }))[0]?.id
+    : undefined;
+  const cloneOrganiser = volunteers.find((v) => v.id === cloneOrganiserId);
+
   return (
     <Flex direction="column" gap="4">
-      <Heading my="4">{t('title')}</Heading>
+      <Heading my="4">{t(cloneSource ? 'cloneTitle' : 'title')}</Heading>
+      {cloneSource && <Text>{t('cloneDescription', { name: cloneSource.name })}</Text>}
       <Card>
         <EventForm
           onUpload={uploadImageAction}
@@ -50,6 +66,8 @@ export default async function CreateEvent() {
           maxImageSizeBytes={maxImageSizeBytes}
           backOnCancel
           organiserOptions={volunteers}
+          cloneSource={cloneSource}
+          editingOrganiser={cloneOrganiser}
         />
       </Card>
     </Flex>

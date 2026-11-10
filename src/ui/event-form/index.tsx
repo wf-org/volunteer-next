@@ -23,6 +23,8 @@ interface Props {
   organiserOptions: VolunteerInfo[];
   editingEvent?: EventInfo;
   editingOrganiser?: VolunteerInfo;
+  /** Event to clone; prefills settings but not slug or dates */
+  cloneSource?: EventInfo;
 }
 
 export default function EventForm({
@@ -32,7 +34,8 @@ export default function EventForm({
   backOnCancel,
   organiserOptions,
   editingEvent,
-  editingOrganiser
+  editingOrganiser,
+  cloneSource
 }: Props) {
   const t = useTranslations('EventForm');
   const router = useRouter();
@@ -40,10 +43,12 @@ export default function EventForm({
   const [endDate, setEndDate] = useState<string>('');
   const today = new Date().toISOString().split('T')[0];
   const minEndDate = startDate?.length ? startDate : today;
+  const defaults = editingEvent ?? cloneSource;
   return (
     <Flex asChild direction="column" align="start" gap="6">
       <form action={onSubmit}>
         {editingEvent && <input type="hidden" name="id" value={editingEvent.id} />}
+        {cloneSource && <input type="hidden" name="cloneFromId" value={cloneSource.id} />}
         <Flex direction="column" gap="4">
           <FormField
             name={t('eventName')}
@@ -56,7 +61,7 @@ export default function EventForm({
               id="event-name"
               placeholder={t('eventName')}
               autoComplete="off"
-              defaultValue={editingEvent?.name}
+              defaultValue={defaults?.name}
               required
             />
           </FormField>
@@ -122,7 +127,7 @@ export default function EventForm({
               type="number"
               min={0}
               step={1}
-              defaultValue={editingEvent?.requiredVolunteerHours ?? 0}
+              defaultValue={defaults?.requiredVolunteerHours ?? 0}
               required
             />
           </FormField>
@@ -131,7 +136,7 @@ export default function EventForm({
             description={t('timeFormatDescription')}
             ariaId="time-format-label"
           >
-            <Select.Root required name="timeFormat" defaultValue={editingEvent?.timeFormat ?? '24h'}>
+            <Select.Root required name="timeFormat" defaultValue={defaults?.timeFormat ?? '24h'}>
               <Select.Trigger aria-labelledby="time-format-label" />
               <Select.Content>
                 <Select.Item value="24h">{t('timeFormat24h')}</Select.Item>
@@ -163,7 +168,7 @@ export default function EventForm({
             <ImageSelector
               name="logo"
               onSelect={onUpload}
-              defaultValue={editingEvent?.logo}
+              defaultValue={defaults?.logo}
               maxImageSizeBytes={maxImageSizeBytes}
             />
           </FormField>
@@ -175,7 +180,7 @@ export default function EventForm({
             <ImageSelector
               name="logoDark"
               onSelect={onUpload}
-              defaultValue={editingEvent?.logoDark}
+              defaultValue={defaults?.logoDark}
               maxImageSizeBytes={maxImageSizeBytes}
             />
           </FormField>
@@ -188,7 +193,7 @@ export default function EventForm({
               size="small"
               name="favicon"
               onSelect={onUpload}
-              defaultValue={editingEvent?.favicon}
+              defaultValue={defaults?.favicon}
               maxImageSizeBytes={maxImageSizeBytes}
             />
           </FormField>

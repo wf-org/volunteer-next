@@ -17,6 +17,7 @@ interface Props {
   titleNode?: React.ReactNode;
   children?: React.ReactNode;
   updateUri?: string;
+  cloneUri?: string;
   onDelete?: () => Promise<void>;
   onArchive?: () => Promise<void>;
   onUnarchive?: () => Promise<void>;
@@ -26,13 +27,14 @@ export default function MenuCard({
   titleNode,
   children,
   updateUri,
+  cloneUri,
   onDelete,
   onArchive,
   onUnarchive
 }: Props) {
   const deleteRef = useRef<HTMLButtonElement>(null);
   const t = useTranslations('MenuCard');
-  const showMenu = updateUri || onDelete || onArchive || onUnarchive;
+  const showMenu = updateUri || cloneUri || onDelete || onArchive || onUnarchive;
   return (
     <Card>
       <Flex justify="between" align="center">
@@ -56,6 +58,11 @@ export default function MenuCard({
               {updateUri && (
                 <DropdownMenu.Item asChild>
                   <NextLink href={updateUri}>{t('update')}</NextLink>
+                </DropdownMenu.Item>
+              )}
+              {cloneUri && (
+                <DropdownMenu.Item asChild>
+                  <NextLink href={cloneUri}>{t('clone')}</NextLink>
                 </DropdownMenu.Item>
               )}
               {onDelete && (

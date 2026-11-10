@@ -54,6 +54,8 @@ export const getQualificationDetailsPath = (qualificationId: string) =>
 export const getEventsPath = () => '/events';
 export const getNoEventsPath = () => '/no-events';
 export const getCreateEventPath = () => '/create-event';
+export const getCloneEventPath = (eventId: string) =>
+  `/create-event?from=${encodeURIComponent(eventId)}`;
 export const getUpdateEventPath = (eventId: string) => `/update-event/${eventId}`;
 export const getEventShiftsPath = (): string => `/shifts`;
 

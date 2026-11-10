@@ -277,3 +277,85 @@ export const archiveEvent = async (
     console.info('Unarchived event with id:', eventId);
   }
 };
+
+/**
+ * Copies teams, qualifications, shifts and shift requirements from one event into another.
+ * Volunteers, sign-ups and team-lead roles are not copied.
+ * Must be run inside a transaction (uses a temp table dropped on commit).
+ * @param sourceEventId - The event to copy from.
+ * @param targetEventId - The (newly created) event to copy into.
+ * @param client - Database client in an open transaction.
+ */
+export const cloneEventStructure = async (
+  sourceEventId: EventId,
+  targetEventId: EventId,
+  client: PoolClient
+): Promise<void> => {
+  await client.query(
+    `CREATE TEMP TABLE clone_id_map (old_id uuid PRIMARY KEY, new_id uuid NOT NULL) ON COMMIT DROP`
+  );
+
+  // Teams
+  await client.query(
+    `INSERT INTO clone_id_map (old_id, new_id)
+     SELECT id, uuid_generate_v4() FROM team WHERE "eventId" = $1`,
+    [sourceEventId]
+  );
+  await client.query(
+    `INSERT INTO team (id, name, "eventId", slug, description, "contactAddress")
+     SELECT m.new_id, t.name, $2, t.slug, t.description, t."contactAddress"
+     FROM team t JOIN clone_id_map m ON m.old_id = t.id
+     WHERE t."eventId" = $1`,
+    [sourceEventId, targetEventId]
+  );
+
+  // Qualifications (event-wide or team-scoped)
+  await client.query(
+    `INSERT INTO clone_id_map (old_id, new_id)
+     SELECT id, uuid_generate_v4() FROM qualification WHERE "eventId" = $1`,
+    [sourceEventId]
+  );
+  await client.query(
+    `INSERT INTO qualification (id, "eventId", "teamId", name, "errorMessage")
+     SELECT m.new_id, $2, tm.new_id, q.name, q."errorMessage"
+     FROM qualification q
+     JOIN clone_id_map m ON m.old_id = q.id
+     LEFT JOIN clone_id_map tm ON tm.old_id = q."teamId"
+     WHERE q."eventId" = $1`,
+    [sourceEventId, targetEventId]
+  );
+
+  // Shifts
+  await client.query(
+    `INSERT INTO clone_id_map (old_id, new_id)
+     SELECT s.id, uuid_generate_v4()
+     FROM shift s JOIN team t ON t.id = s."teamId"
+     WHERE t."eventId" = $1`,
+    [sourceEventId]
+  );
+  await client.query(
+    `INSERT INTO shift (
+       id, "teamId", title, description, "eventDay", "startTime", "durationHours",
+       "volunteerHours", "minVolunteers", "maxVolunteers", "isActive"
+     )
+     SELECT sm.new_id, tm.new_id, s.title, s.description, s."eventDay", s."startTime",
+       s."durationHours", s."volunteerHours", s."minVolunteers", s."maxVolunteers", s."isActive"
+     FROM shift s
+     JOIN team t ON t.id = s."teamId"
+     JOIN clone_id_map sm ON sm.old_id = s.id
+     JOIN clone_id_map tm ON tm.old_id = s."teamId"
+     WHERE t."eventId" = $1`,
+    [sourceEventId]
+  );
+
+  // Shift requirements
+  await client.query(
+    `INSERT INTO requirement ("shiftId", "qualificationId")
+     SELECT sm.new_id, qm.new_id
+     FROM requirement r
+     JOIN clone_id_map sm ON sm.old_id = r."shiftId"
+     JOIN clone_id_map qm ON qm.old_id = r."qualificationId"`
+  );
+
+  console.info('Cloned event structure:', { sourceEventId, targetEventId });
+};

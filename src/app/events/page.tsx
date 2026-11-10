@@ -75,6 +75,7 @@ export default async function EventsDashboard({ searchParams }: PageProps<`/even
           onArchive={hasEventEnded(event) ? archiveAction : undefined}
           key={event.id}
           asLink
+          cloneable
         />
       ))}
     </Flex>

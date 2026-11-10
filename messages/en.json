@@ -30,7 +30,9 @@
     "minimumHoursDescription": "This event asks each volunteer for at least {required} hours. You have {current}, so {remaining} more to go."
   },
   "CreateEventPage": {
-    "title": "Create Event"
+    "title": "Create Event",
+    "cloneTitle": "Clone Event",
+    "cloneDescription": "Teams, shifts and qualifications from \"{name}\" will be copied to the new event. Volunteers and sign-ups are not copied."
   },
   "UpdateEventPage": {
     "title": "Update Event"
@@ -234,6 +236,7 @@
   },
   "MenuCard": {
     "update": "Update",
+    "clone": "Clone",
     "delete": "Delete",
     "archive": "Archive",
     "unarchive": "Unarchive",

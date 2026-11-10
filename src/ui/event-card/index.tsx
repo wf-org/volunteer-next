@@ -9,7 +9,7 @@
 import { useTranslations } from 'next-intl';
 import { Badge, Flex, Text } from '@radix-ui/themes';
 import MenuCard from '@/ui/menu-card';
-import { getUpdateEventPath } from '@/utils/path';
+import { getCloneEventPath, getUpdateEventPath } from '@/utils/path';
 import { EventCookie, getCookie, setCookie } from '@/utils/cookie';
 import EventLink from '../event-link';
 import { hasEventEnded, hasEventStarted } from '@/utils/date';
@@ -27,8 +27,9 @@ interface Props {
   onDelete?: (id: EventId) => Promise<void>;
   onArchive?: (id: EventId, archived: boolean) => Promise<void>;
   asLink?: boolean;
+  cloneable?: boolean;
 }
-export default function EventCard({ event, onDelete, asLink, onArchive }: Props) {
+export default function EventCard({ event, onDelete, asLink, onArchive, cloneable }: Props) {
   const t = useTranslations('EventCard');
   const editable = !hasEventStarted(event);
   const archiveable = onArchive && hasEventEnded(event);
@@ -57,6 +58,7 @@ export default function EventCard({ event, onDelete, asLink, onArchive }: Props)
         )
       }
       updateUri={editable ? getUpdateEventPath(event.id) : undefined}
+      cloneUri={cloneable ? getCloneEventPath(event.id) : undefined}
       onArchive={archiveable && !event.archived ? () => onArchive(event.id, true) : undefined}
       onUnarchive={archiveable && event.archived ? () => onArchive(event.id, false) : undefined}
       onDelete={
