@@ -23,7 +23,7 @@ interface Props {
 export default function EventFilters({ withFilters = [] }: Props) {
   const t = useTranslations('EventFilters');
   const hasFilter = new Set(withFilters);
-  const showFilterPanel = hasFilter.difference(new Set(['searchQuery'])).size > 0;
+  const showFilterPanel = withFilters.some((filter) => filter !== 'searchQuery');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const searchParams = useSearchParams();
   const currentFilters = paramsToEventFilters(searchParams);

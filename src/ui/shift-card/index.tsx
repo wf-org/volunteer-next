@@ -17,6 +17,7 @@ import { getQualificationDetailsPath } from '@/utils/path';
 import { useState } from 'react';
 import ProgressBar from '../progress-bar';
 import NextLink from 'next/link';
+import Markdown from '@/ui/markdown';
 
 interface Props {
   shift: ShiftInfo;
@@ -29,11 +30,13 @@ interface Props {
   onSignup?: () => void;
   onCancel?: () => void;
   eventStartDate?: Date;
+  timeFormat?: '12h' | '24h';
 }
 
 export default function ShiftCard({
   shift,
   eventStartDate,
+  timeFormat,
   volunteers,
   qualifications = [],
   onEdit,
@@ -80,7 +83,12 @@ export default function ShiftCard({
               <Heading as="h3" size="4" weight="medium">
                 {shift.title}
               </Heading>
-              <TimeSpan start={startTime} end={endTime} />
+              {shift.description && (
+                <Text as="div" size="2" color="gray">
+                  <Markdown content={shift.description} />
+                </Text>
+              )}
+              <TimeSpan start={startTime} end={endTime} timeFormat={timeFormat} />
             </Flex>
             {/* Spots and Signup */}
             <Flex

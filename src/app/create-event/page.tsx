@@ -12,7 +12,7 @@ import { validateUserIds } from '@/validator/user-validator';
 import { usersToVolunteers } from '@/lib/volunteer';
 import { getPermissionsProfile } from '@/utils/permissions';
 import { getEventsPath } from '@/utils/path';
-import { uploadImageAction } from '@/lib/image';
+import { getMaxImageSizeBytes, uploadImageAction } from '@/lib/image';
 
 const PAGE_KEY = 'CreateEventPage';
 
@@ -38,6 +38,7 @@ export default async function CreateEvent() {
   const t = await getTranslations(PAGE_KEY);
   const permissionsProfile = getPermissionsProfile(await currentUser());
   const volunteers = usersToVolunteers(await getUsers(), permissionsProfile);
+  const maxImageSizeBytes = getMaxImageSizeBytes();
 
   return (
     <Flex direction="column" gap="4">
@@ -46,6 +47,7 @@ export default async function CreateEvent() {
         <EventForm
           onUpload={uploadImageAction}
           onSubmit={onSubmit}
+          maxImageSizeBytes={maxImageSizeBytes}
           backOnCancel
           organiserOptions={volunteers}
         />
