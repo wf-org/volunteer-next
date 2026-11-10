@@ -177,7 +177,8 @@ jobs:
           secrets="$RUNNER_TEMP/secrets.env"
           plain_json="$RUNNER_TEMP/plain.json"
           secrets_json="$RUNNER_TEMP/secrets.json"
-          trap 'rm -f "$secrets" "$plain_json" "$secrets_json"' EXIT
+          param_json="$RUNNER_TEMP/param.json"
+          trap 'rm -f "$secrets" "$plain_json" "$secrets_json" "$param_json"' EXIT
           sops -d deploy/prod/env.secrets.enc > "$secrets"
 
           # Writes a KEY=value file to $2 as a JSON object; empty values are skipped.
@@ -216,10 +217,12 @@ jobs:
           env_to_json deploy/prod/env "$plain_json"
 
           jq -r 'keys[]' "$secrets_json" | while IFS= read -r key; do
-            # Value goes in on stdin, not the command line
+            # Value goes in through a 0600 file, not the command line. (The CLI
+            # reads file:///dev/stdin from a pipe as empty: "Invalid JSON received")
             jq --arg key "$key" --arg name "$SSM_PATH/$key" \
-              '{Name: $name, Value: .[$key], Type: "SecureString", Overwrite: true}' "$secrets_json" |
-              aws ssm put-parameter --cli-input-json file:///dev/stdin --output text > /dev/null
+              '{Name: $name, Value: .[$key], Type: "SecureString", Overwrite: true}' \
+              "$secrets_json" > "$param_json"
+            aws ssm put-parameter --cli-input-json "file://$param_json" --output text > /dev/null
             echo "stored $SSM_PATH/$key"
           done
           refs=$(jq -c --arg prefix "ssm:$SSM_PATH/" 'with_entries(.value = $prefix + .key)' "$secrets_json")
