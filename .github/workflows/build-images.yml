@@ -171,6 +171,7 @@ jobs:
         id: web-env
         env:
           SSM_PATH: /volunteer-next
+          UPLOAD_CLEANER_ENV: ${{ steps.resolve.outputs.upload_cleaner_environment }}
         run: |
           set -euo pipefail
           umask 077
@@ -233,6 +234,16 @@ jobs:
               echo "::warning::$key is in both deploy/prod/env and env.secrets.enc; using the secret"
             done
           environment=$(jq -c --argjson refs "$refs" '. + $refs' "$plain_json")
+
+          # Without UPLOADS_BUCKET the app writes uploads to the function's local disk,
+          # where other instances can't read them. Use the bucket the upload-cleaner
+          # function cleans, unless deploy/prod/env sets one.
+          if ! jq -e '.UPLOADS_BUCKET' <<< "$environment" > /dev/null; then
+            bucket=$(jq -r '.UPLOADS_BUCKET // empty' <<< "${UPLOAD_CLEANER_ENV:-null}")
+            [ -n "$bucket" ] ||
+              { echo "::error::UPLOADS_BUCKET is not set in deploy/prod/env or on the upload-cleaner function"; exit 1; }
+            environment=$(jq -c --arg bucket "$bucket" '. + {UPLOADS_BUCKET: $bucket}' <<< "$environment")
+          fi
 
           # Fail here rather than at the function's startup when a reference
           # points at a parameter that doesn't exist (GetParameters takes 10 names)
