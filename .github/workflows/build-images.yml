@@ -2,7 +2,7 @@ name: Build and deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main,lambda]
   workflow_dispatch:
 
 # Deploys run one at a time and are never cancelled mid-migration.
@@ -40,8 +40,8 @@ jobs:
           - name: migrations
             repository: ${{ vars.ECR_REPOSITORY_MIGRATIONS }}
             context: db
-            dockerfile: db/liquibase/Dockerfile
-            target: ''
+            dockerfile: db/migrator/Dockerfile
+            target: lambda
     steps:
       - uses: actions/checkout@v4
 
@@ -72,38 +72,39 @@ jobs:
 
   deploy:
     needs: build
-    # Runs the arm64 migrations image
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - uses: aws-actions/amazon-ecr-login@v2
-
-      # POSTGRES_URL: Neon's direct (not pooled) connection URI,
-      # `tofu output -raw postgres_connection_uri`. Liquibase's lock needs a session.
+      # The migrate function holds POSTGRES_URL (Neon direct, not pooled, URI)
+      # in its own environment; CI only needs lambda:UpdateFunctionCode/InvokeFunction.
       - name: Run migrations
         env:
-          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
-          IMAGE: ${{ vars.ECR_REPOSITORY_MIGRATIONS }}:${{ github.sha }}
+          FUNCTION: ${{ vars.LAMBDA_FUNCTION_MIGRATE }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY_MIGRATIONS }}
+          TAG: ${{ github.sha }}
         run: |
-          eval "$(node -e '
-            const url = new URL(process.env.POSTGRES_URL.replace(/^postgres:\/\//, "postgresql://"));
-            const params = new URLSearchParams(url.search);
-            params.delete("channel_binding");
-            if (!params.has("sslmode")) params.set("sslmode", "require");
-            const db = url.pathname.slice(1) || "postgres";
-            const q = (s) => JSON.stringify(s);
-            console.log("export LIQUIBASE_COMMAND_URL=" + q(`jdbc:postgresql://${url.hostname}:${url.port || 5432}/${db}?${params}`));
-            console.log("export LIQUIBASE_COMMAND_USERNAME=" + q(decodeURIComponent(url.username)));
-            console.log("export LIQUIBASE_COMMAND_PASSWORD=" + q(decodeURIComponent(url.password)));
-          ')"
-          echo "::add-mask::$LIQUIBASE_COMMAND_PASSWORD"
-          docker run --rm \
-            -e LIQUIBASE_COMMAND_URL -e LIQUIBASE_COMMAND_USERNAME -e LIQUIBASE_COMMAND_PASSWORD \
-            "$IMAGE" update
+          digest=$(aws ecr batch-get-image \
+            --repository-name "${REPOSITORY#*/}" \
+            --image-ids imageTag="$TAG" \
+            --query 'images[0].imageId.imageDigest' --output text)
+          aws lambda update-function-code \
+            --function-name "$FUNCTION" \
+            --image-uri "$REPOSITORY@$digest" \
+            --query 'LastUpdateStatus' --output text
+          aws lambda wait function-updated --function-name "$FUNCTION"
+          # Synchronous; --cli-read-timeout 0 so a long migration isn't dropped at 60s
+          aws lambda invoke \
+            --function-name "$FUNCTION" \
+            --cli-read-timeout 0 \
+            --log-type Tail \
+            result.json > invoke.json
+          jq -r '.LogResult' invoke.json | base64 -d
+          cat result.json; echo
+          if jq -e '.FunctionError' invoke.json > /dev/null; then exit 1; fi
 
       - name: Update functions
         env:

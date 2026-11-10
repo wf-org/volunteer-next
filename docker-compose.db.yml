@@ -15,20 +15,17 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
 
-  # Liquibase service to run database migrations
-  liquibase:
-    image: liquibase/liquibase
+  # One-shot migration runner (db/migrator); retries until db accepts connections
+  migrate:
+    build:
+      context: ./db
+      dockerfile: migrator/Dockerfile
+      target: runner
+    environment:
+      POSTGRES_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
     volumes:
-      - ./db/changelog.xml:/liquibase/changelog.xml
-      - ./db/scripts:/liquibase/scripts
-      - ./db/drivers:/liquibase/lib
-    command: >
-      --classpath=/liquibase/lib/postgresql.jar
-      --url=jdbc:postgresql://db:${POSTGRES_PORT}/${POSTGRES_DB}
-      --changeLogFile=changelog.xml
-      --username=postgres
-      --password=${POSTGRES_PASSWORD}
-      update
+      - ./db/scripts:/app/scripts
+    restart: on-failure
     depends_on:
       - db
 

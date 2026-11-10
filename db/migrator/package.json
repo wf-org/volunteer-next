@@ -1,0 +1,11 @@
+{
+  "name": "@volunteer-next/migrator",
+  "type": "module",
+  "version": "1.0.0",
+  "dependencies": {
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0"
+  }
+}
