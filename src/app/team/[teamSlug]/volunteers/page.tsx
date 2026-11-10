@@ -77,6 +77,7 @@ export default async function TeamVolunteers({
                   <TimeSpan
                     start={shift.startTime}
                     end={addHoursToTimeString(shift.startTime, shift.durationHours)}
+                    timeFormat={event.timeFormat}
                   />
                 </Text>
               </Flex>

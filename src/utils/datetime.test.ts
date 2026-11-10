@@ -3,7 +3,8 @@ import {
   eventDayToDate,
   dateToEventDay,
   addHoursToTimeString,
-  eventDayTimeToDate
+  eventDayTimeToDate,
+  to12HourTimeString
 } from './datetime';
 
 describe('datetime utilities', () => {
@@ -56,6 +57,14 @@ describe('datetime utilities', () => {
       const eventStartDate = new Date('2023-01-01');
       const result = eventDayTimeToDate(eventStartDate, 1, '12:30');
       expect(result.toISOString()).toBe(new Date('2023-01-02T12:30:00.000Z').toISOString());
+    });
+  });
+
+  describe('to12HourTimeString', () => {
+    it('should format morning, noon, and midnight times in 12-hour format', () => {
+      expect(to12HourTimeString('09:05')).toBe('9:05 AM');
+      expect(to12HourTimeString('12:30')).toBe('12:30 PM');
+      expect(to12HourTimeString('00:15')).toBe('12:15 AM');
     });
   });
 });

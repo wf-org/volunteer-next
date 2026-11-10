@@ -18,6 +18,7 @@ import { FormField } from '../form-dialog';
 interface Props {
   onSubmit: (data: FormData) => Promise<void>;
   onUpload: (file: File) => Promise<string>;
+  maxImageSizeBytes: number;
   backOnCancel?: boolean;
   organiserOptions: VolunteerInfo[];
   editingEvent?: EventInfo;
@@ -27,6 +28,7 @@ interface Props {
 export default function EventForm({
   onSubmit,
   onUpload,
+  maxImageSizeBytes,
   backOnCancel,
   organiserOptions,
   editingEvent,
@@ -108,6 +110,36 @@ export default function EventForm({
             />
           </FormField>
           <FormField
+            name={t('requiredVolunteerHours')}
+            description={t('requiredVolunteerHoursDescription')}
+            ariaId="required-volunteer-hours-label"
+          >
+            <TextField.Root
+              name="requiredVolunteerHours"
+              aria-labelledby="required-volunteer-hours-label"
+              id="required-volunteer-hours"
+              placeholder={t('requiredVolunteerHoursPlaceholder')}
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={editingEvent?.requiredVolunteerHours ?? 0}
+              required
+            />
+          </FormField>
+          <FormField
+            name={t('timeFormat')}
+            description={t('timeFormatDescription')}
+            ariaId="time-format-label"
+          >
+            <Select.Root required name="timeFormat" defaultValue={editingEvent?.timeFormat ?? '24h'}>
+              <Select.Trigger aria-labelledby="time-format-label" />
+              <Select.Content>
+                <Select.Item value="24h">{t('timeFormat24h')}</Select.Item>
+                <Select.Item value="12h">{t('timeFormat12h')}</Select.Item>
+              </Select.Content>
+            </Select.Root>
+          </FormField>
+          <FormField
             name={t('eventOrganiser')}
             description={t('eventOrganiserDescription')}
             ariaId="event-organiser-label"
@@ -128,7 +160,12 @@ export default function EventForm({
             description={t('eventLogoDescription')}
             ariaId="event-logo-label"
           >
-            <ImageSelector name="logo" onSelect={onUpload} defaultValue={editingEvent?.logo} />
+            <ImageSelector
+              name="logo"
+              onSelect={onUpload}
+              defaultValue={editingEvent?.logo}
+              maxImageSizeBytes={maxImageSizeBytes}
+            />
           </FormField>
           <FormField
             name={t('eventLogoDark')}
@@ -139,6 +176,7 @@ export default function EventForm({
               name="logoDark"
               onSelect={onUpload}
               defaultValue={editingEvent?.logoDark}
+              maxImageSizeBytes={maxImageSizeBytes}
             />
           </FormField>
           <FormField
@@ -151,6 +189,7 @@ export default function EventForm({
               name="favicon"
               onSelect={onUpload}
               defaultValue={editingEvent?.favicon}
+              maxImageSizeBytes={maxImageSizeBytes}
             />
           </FormField>
 

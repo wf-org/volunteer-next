@@ -69,6 +69,19 @@ export const addHoursToTimeString = (timeStr: TimeString, hoursToAdd: number): T
 };
 
 /**
+ * Formats a time string from HH:MM to h:MM AM/PM.
+ * @param timeStr - A string in HH:MM format
+ * @returns Formatted time string in 12-hour format
+ */
+export const to12HourTimeString = (timeStr: TimeString): string => {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  const isPm = hours >= 12;
+  const hour12 = hours % 12 || 12;
+  const suffix = isPm ? 'PM' : 'AM';
+  return `${hour12}:${minutes.toString().padStart(2, '0')} ${suffix}`;
+};
+
+/**
  *
  * @param eventStartDate - The start date of the event
  * @param eventDay - The day of the event (0 for first day, 1 for second day, etc.)

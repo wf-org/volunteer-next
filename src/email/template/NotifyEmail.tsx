@@ -5,7 +5,7 @@
  */
 
 import { getListByDate } from '@/utils/date';
-import { addHoursToTimeString, eventDayToDate } from '@/utils/datetime';
+import { addHoursToTimeString, eventDayToDate, to12HourTimeString } from '@/utils/datetime';
 import { getTranslations } from 'next-intl/server';
 
 const TEMPLATE_KEY = 'NotifyEmail';
@@ -40,6 +40,7 @@ const ShiftList = ({
 }) => {
   const teamsById = Object.fromEntries(teams.map((team) => [team.id, team]));
   const shiftsByDate = getListByDate(shifts, (s) => eventDayToDate(event.startDate, s.eventDay));
+  const timeFormat = event.timeFormat;
   return (
     <ul>
       {Object.entries(shiftsByDate).map(([date, shifts]) => (
@@ -48,7 +49,7 @@ const ShiftList = ({
           <ul>
             {shifts.map((shift) => (
               <li key={shift.id}>
-                <ShiftRow shift={shift} team={teamsById[shift.teamId]} />
+                <ShiftRow shift={shift} team={teamsById[shift.teamId]} timeFormat={timeFormat} />
               </li>
             ))}
           </ul>
@@ -58,11 +59,22 @@ const ShiftList = ({
   );
 };
 
-const ShiftRow = ({ shift, team }: { shift: ShiftInfo; team: TeamInfo | undefined }) => (
+const formatShiftTime = (time: TimeString, timeFormat?: '12h' | '24h') =>
+  timeFormat === '12h' ? to12HourTimeString(time) : time;
+
+const ShiftRow = ({
+  shift,
+  team,
+  timeFormat
+}: {
+  shift: ShiftInfo;
+  team: TeamInfo | undefined;
+  timeFormat?: '12h' | '24h';
+}) => (
   <>
     {shift.title}
-    {team ? ` (${team.name})` : ''} {shift.startTime} to{' '}
-    {addHoursToTimeString(shift.startTime, shift.durationHours)}
+    {team ? ` (${team.name})` : ''} {formatShiftTime(shift.startTime, timeFormat)} to{' '}
+    {formatShiftTime(addHoursToTimeString(shift.startTime, shift.durationHours), timeFormat)}
   </>
 );
 

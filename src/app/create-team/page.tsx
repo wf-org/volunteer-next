@@ -6,7 +6,6 @@ import { addRoleToUsers } from '@/service/user-service';
 import { checkAuthorisation, getCurrentEventOrRedirect } from '@/session';
 import { inTransaction } from '@/db';
 import TeamForm from '@/ui/team-form';
-import { validateUserIds } from '@/validator/user-validator';
 import { validateNewTeam } from '@/validator/team-validator';
 import { createTeam } from '@/service/team-service';
 import { getTeamsPath } from '@/utils/path';
@@ -14,10 +13,32 @@ import { hasEventStarted } from '@/utils/date';
 
 const PAGE_KEY = 'CreateTeamPage';
 
+const parseRequireTeamLead = (value: string | undefined): boolean => {
+  if (!value) {
+    return true;
+  }
+  return value.split(/\s+#/)[0].trim().toLowerCase() === 'true';
+};
+
+const getTeamLeadIds = (data: FormData, requireTeamLead: boolean): string[] => {
+  const teamLeadIds = data
+    .getAll('teamleadId')
+    .map((value) => value.toString().trim())
+    .filter((id) => id.length > 0);
+
+  if (requireTeamLead && teamLeadIds.length === 0) {
+    throw new Error('At least one team lead is required');
+  }
+
+  return teamLeadIds;
+};
+
 export const generateMetadata = metadata(PAGE_KEY);
 
 export default async function CreateTeam() {
   const event = await getCurrentEventOrRedirect();
+  const defaultContactAddress = process.env.DEFAULT_TEAM_CONTACT_ADDRESS?.trim();
+  const requireTeamLead = parseRequireTeamLead(process.env.REQUIRE_TEAM_LEAD);
 
   await checkAuthorisation([{ type: 'admin' }, { type: 'organiser', eventId: event.id }]);
   const t = await getTranslations(PAGE_KEY);
@@ -32,15 +53,17 @@ export default async function CreateTeam() {
     await checkAuthorisation([{ type: 'admin' }, { type: 'organiser', eventId: event.id }]);
 
     const newTeam = validateNewTeam(data);
-    const teamleads = validateUserIds(data, 'teamleadId');
+    const teamleads = getTeamLeadIds(data, requireTeamLead);
 
     await inTransaction(async (client) => {
       const createdTeam = await createTeam(newTeam, client);
-      await addRoleToUsers(
-        { type: 'team-lead', eventId: event.id, teamId: createdTeam.id },
-        teamleads,
-        client
-      );
+      if (teamleads.length > 0) {
+        await addRoleToUsers(
+          { type: 'team-lead', eventId: event.id, teamId: createdTeam.id },
+          teamleads,
+          client
+        );
+      }
     });
     redirect(getTeamsPath());
   };
@@ -50,7 +73,13 @@ export default async function CreateTeam() {
       <Heading my="4" as="h1" align="center">
         {t('title')}
       </Heading>
-      <TeamForm eventId={event.id} onSubmit={onSubmit} backOnCancel />
+      <TeamForm
+        eventId={event.id}
+        onSubmit={onSubmit}
+        backOnCancel
+        defaultContactAddress={defaultContactAddress}
+        requireTeamLead={requireTeamLead}
+      />
     </Flex>
   );
 }
