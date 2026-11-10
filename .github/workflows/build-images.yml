@@ -3,6 +3,15 @@ name: Build and deploy
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'upload-cleaner/**'
+      - 'mailer/**'
+      - 'db/**'
+      - 'package.json'
+      - 'deploy/**'
+      - '.github/workflows/build-images.yml'
+      - '**/Dockerfile'
   workflow_dispatch:
 
 # Deploys run one at a time and are never cancelled mid-migration.
@@ -70,10 +79,78 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
-  deploy:
+  # Stores each secret in deploy/prod/env.secrets.enc (SOPS, KMS alias/sops) as a
+  # SecureString <SSM_PATH>/<KEY>. The deploy job copies them into the web
+  # function's environment.
+  secrets:
     needs: build
     runs-on: ubuntu-24.04
+    outputs:
+      keys: ${{ steps.store.outputs.keys }}
+    env:
+      SSM_PATH: /volunteer-next/prod
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install sops
+        env:
+          SOPS_VERSION: 3.13.3
+          # From sops-v3.13.3.checksums.txt on the release page
+          SOPS_SHA256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/sops" \
+            "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
+          echo "$SOPS_SHA256  $RUNNER_TEMP/sops" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/sops" /usr/local/bin/sops
+
+      - name: Secrets to Parameter Store
+        id: store
+        run: |
+          set -euo pipefail
+          umask 077
+          secrets="$RUNNER_TEMP/secrets.env"
+          trap 'rm -f "$secrets"' EXIT
+          sops -d deploy/prod/env.secrets.enc > "$secrets"
+
+          keys=""
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            line="${line#"${line%%[![:space:]]*}"}"
+            case "$line" in '' | '#'*) continue ;; esac
+            line="${line#export }"
+            key="${line%%=*}"
+            value="${line#*=}"
+            # Don't echo the line: it holds a secret
+            [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && "$line" == *=* ]] ||
+              { echo "::error::env.secrets.enc has a line that isn't KEY=value"; exit 1; }
+            if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then value="${BASH_REMATCH[1]}"; fi
+            if [ -z "$value" ]; then
+              echo "::warning::$key is empty in env.secrets.enc; skipped"
+              continue
+            fi
+            echo "::add-mask::$value"
+            # Value goes in on stdin, not the command line
+            jq -Rn --arg name "$SSM_PATH/$key" \
+              '{Name: $name, Value: input, Type: "SecureString", Overwrite: true}' <<< "$value" |
+              aws ssm put-parameter --cli-input-json file:///dev/stdin --output text > /dev/null
+            echo "stored $SSM_PATH/$key"
+            keys="$keys $key"
+          done < "$secrets"
+
+          [ -n "$keys" ] || { echo "::error::No secrets found in env.secrets.enc"; exit 1; }
+          echo "keys=${keys# }" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: secrets
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
@@ -132,3 +209,64 @@ jobs:
             [ -n "$function" ] || continue
             aws lambda wait function-updated --function-name "$function"
           done
+
+      # Environment = current variables (infra-managed ones stay)
+      #             + deploy/prod/env + this run's secrets from Parameter Store.
+      - name: Web function environment
+        env:
+          FUNCTION: ${{ vars.LAMBDA_FUNCTION_WEB }}
+          SECRET_KEYS: ${{ needs.secrets.outputs.keys }}
+          SSM_PATH: /volunteer-next/prod
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f current.json params.json environment.json' EXIT
+          aws lambda get-function-configuration --function-name "$FUNCTION" \
+            --query 'Environment.Variables' --output json > current.json
+
+          aws ssm get-parameters-by-path --path "$SSM_PATH" --recursive --with-decryption \
+            --query 'Parameters[].{name: Name, value: Value}' --output json > params.json
+          jq -r '.[].value' params.json | while IFS= read -r value; do echo "::add-mask::$value"; done
+
+          plain='{}'
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            line="${line#"${line%%[![:space:]]*}"}"
+            case "$line" in '' | '#'*) continue ;; esac
+            line="${line#export }"
+            key="${line%%=*}"
+            value="${line#*=}"
+            [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && "$line" == *=* ]] ||
+              { echo "::error::deploy/prod/env has a line that isn't KEY=value: $line"; exit 1; }
+            if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then value="${BASH_REMATCH[1]}"; fi
+            if [ -z "$value" ]; then
+              echo "::notice::$key is empty in deploy/prod/env; the function keeps its current value"
+              continue
+            fi
+            if [[ " $SECRET_KEYS " == *" $key "* ]]; then
+              echo "::warning::$key is in both deploy/prod/env and env.secrets.enc; using the secret"
+            fi
+            plain=$(jq -c --arg k "$key" --arg v "$value" '. + {($k): $v}' <<< "$plain")
+          done < deploy/prod/env
+
+          # Only the keys stored by this run, so parameters dropped from
+          # env.secrets.enc aren't reapplied
+          jq -n \
+            --slurpfile current current.json \
+            --slurpfile params params.json \
+            --argjson plain "$plain" \
+            --arg keys "$SECRET_KEYS" \
+            --arg prefix "$SSM_PATH/" '
+            ($keys | split(" ") | map(select(length > 0))) as $wanted
+            | ($params[0] | map({key: (.name | ltrimstr($prefix)), value})
+               | map(select(.key as $k | $wanted | index($k))) | from_entries) as $secrets
+            | if ($secrets | length) != ($wanted | length)
+              then error("missing from Parameter Store: \($wanted - ($secrets | keys) | join(", "))")
+              else {Variables: (($current[0] // {}) + $plain + $secrets)} end
+          ' > environment.json
+          echo "Setting: $(jq -r '.Variables | keys | join(" ")' environment.json)"
+
+          aws lambda update-function-configuration --function-name "$FUNCTION" \
+            --environment file://environment.json \
+            --query 'LastUpdateStatus' --output text
+          aws lambda wait function-updated --function-name "$FUNCTION"
