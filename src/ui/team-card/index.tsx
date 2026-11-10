@@ -13,6 +13,7 @@ import Collapsible from '../collapsible';
 import { useTranslations } from 'next-intl';
 import { deduplicateBy } from '@/utils/list';
 import NextLink from 'next/link';
+import Markdown from '../markdown';
 
 interface Props {
   team: TeamInfo;
@@ -83,6 +84,7 @@ export default function TeamCard({ team, shifts, shiftVolunteers, actions, showS
             {actions}
           </Flex>
         </Flex>
+        {team.description && <Markdown content={team.description} />}
         {/* Collapsible volunteers */}
         {volunteerNames.length > 0 && (
           <Collapsible header={t('volunteers')}>
