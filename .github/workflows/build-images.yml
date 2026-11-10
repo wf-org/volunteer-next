@@ -1,0 +1,133 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Deploys run one at a time and are never cancelled mid-migration.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    # The Lambda functions run on arm64
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: app
+            repository: ${{ vars.ECR_REPOSITORY_APP }}
+            context: .
+            dockerfile: Dockerfile
+            target: runner
+          - name: mailer
+            repository: ${{ vars.ECR_REPOSITORY_MAILER }}
+            context: mailer
+            dockerfile: mailer/docker/Dockerfile
+            target: lambda
+          - name: upload-cleaner
+            repository: ${{ vars.ECR_REPOSITORY_UPLOAD_CLEANER }}
+            context: upload-cleaner
+            dockerfile: upload-cleaner/docker/Dockerfile
+            target: lambda
+          - name: migrations
+            repository: ${{ vars.ECR_REPOSITORY_MIGRATIONS }}
+            context: db
+            dockerfile: db/liquibase/Dockerfile
+            target: ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          platforms: linux/arm64
+          push: true
+          # Lambda rejects image indexes; disable attestations so a single manifest is pushed.
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ matrix.repository }}:${{ github.sha }}
+            ${{ matrix.repository }}:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    needs: build
+    # Runs the arm64 migrations image
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      # POSTGRES_URL: Neon's direct (not pooled) connection URI,
+      # `tofu output -raw postgres_connection_uri`. Liquibase's lock needs a session.
+      - name: Run migrations
+        env:
+          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+          IMAGE: ${{ vars.ECR_REPOSITORY_MIGRATIONS }}:${{ github.sha }}
+        run: |
+          eval "$(node -e '
+            const url = new URL(process.env.POSTGRES_URL.replace(/^postgres:\/\//, "postgresql://"));
+            const params = new URLSearchParams(url.search);
+            params.delete("channel_binding");
+            if (!params.has("sslmode")) params.set("sslmode", "require");
+            const db = url.pathname.slice(1) || "postgres";
+            const q = (s) => JSON.stringify(s);
+            console.log("export LIQUIBASE_COMMAND_URL=" + q(`jdbc:postgresql://${url.hostname}:${url.port || 5432}/${db}?${params}`));
+            console.log("export LIQUIBASE_COMMAND_USERNAME=" + q(decodeURIComponent(url.username)));
+            console.log("export LIQUIBASE_COMMAND_PASSWORD=" + q(decodeURIComponent(url.password)));
+          ')"
+          echo "::add-mask::$LIQUIBASE_COMMAND_PASSWORD"
+          docker run --rm \
+            -e LIQUIBASE_COMMAND_URL -e LIQUIBASE_COMMAND_USERNAME -e LIQUIBASE_COMMAND_PASSWORD \
+            "$IMAGE" update
+
+      - name: Update functions
+        env:
+          TAG: ${{ github.sha }}
+          FUNCTIONS: |
+            ${{ vars.LAMBDA_FUNCTION_WEB }} ${{ vars.ECR_REPOSITORY_APP }}
+            ${{ vars.LAMBDA_FUNCTION_MAILER }} ${{ vars.ECR_REPOSITORY_MAILER }}
+            ${{ vars.LAMBDA_FUNCTION_UPLOAD_CLEANER }} ${{ vars.ECR_REPOSITORY_UPLOAD_CLEANER }}
+        run: |
+          echo "$FUNCTIONS" | while read -r function repository; do
+            [ -n "$function" ] || continue
+            # Deploy by digest, so the function doesn't follow a moving tag
+            digest=$(aws ecr batch-get-image \
+              --repository-name "${repository#*/}" \
+              --image-ids imageTag="$TAG" \
+              --query 'images[0].imageId.imageDigest' --output text)
+            echo "$function -> $repository@$digest"
+            aws lambda update-function-code \
+              --function-name "$function" \
+              --image-uri "$repository@$digest" \
+              --query 'LastUpdateStatus' --output text
+          done
+          # Wait for all three so a failed update fails the job
+          echo "$FUNCTIONS" | while read -r function repository; do
+            [ -n "$function" ] || continue
+            aws lambda wait function-updated --function-name "$function"
+          done
