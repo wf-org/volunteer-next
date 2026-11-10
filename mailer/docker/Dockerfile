@@ -24,7 +24,21 @@ RUN --mount=type=cache,target=/root/.npm \
   fi
 
 # ============================================
-# Stage 2: Run worker application
+# Stage 2: AWS Lambda image (build with --target lambda)
+# Invoked on a schedule by EventBridge; handler is lambda.handler.
+# ============================================
+
+FROM public.ecr.aws/lambda/nodejs:24 AS lambda
+
+ENV NODE_ENV=production
+
+COPY --from=dependencies /app/node_modules ${LAMBDA_TASK_ROOT}/node_modules
+COPY . ${LAMBDA_TASK_ROOT}/
+
+CMD ["lambda.handler"]
+
+# ============================================
+# Stage 3: Run worker application (default; long-running cron for docker compose)
 # ============================================
 
 FROM node:${NODE_VERSION} AS runner

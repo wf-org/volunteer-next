@@ -21,4 +21,7 @@ else
   echo "Warning: Secrets directory not found at $SECRETS_DIR"
 fi
 
+# Writable Next.js cache target (see Dockerfile; required on Lambda)
+mkdir -p /tmp/next-cache
+
 exec "$@"

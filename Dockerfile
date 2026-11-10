@@ -80,6 +80,10 @@ RUN chown node:node uploads
 RUN mkdir .next
 RUN chown node:node .next
 
+# Lambda's filesystem is read-only except /tmp, so point the Next.js runtime
+# cache at /tmp (created by docker-entrypoint.sh).
+RUN ln -s /tmp/next-cache .next/cache
+
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=node:node /app/.next/standalone ./
@@ -88,6 +92,12 @@ COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 # If you want to persist the fetch cache generated during the build so that
 # cached responses are available immediately on startup, uncomment this line:
 # COPY --from=builder --chown=node:node /app/.next/cache ./.next/cache
+
+# AWS Lambda Web Adapter: proxies Lambda invocations to the HTTP server.
+# Only active when running in Lambda; ignored by plain Docker. The function
+# sets AWS_LWA_PORT and AWS_LWA_READINESS_CHECK_PATH.
+# https://github.com/awslabs/aws-lambda-web-adapter
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
 # Copy and register the entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

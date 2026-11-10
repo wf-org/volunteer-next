@@ -1,8 +1,13 @@
 import { sendUserShiftEmail, getNotifyVolunteersAction } from './email';
 import { sendEmailWithTemplate } from '@/email/template';
+import { startMailer } from '@/email/mailer';
 
 jest.mock('@/email/template', () => ({
   sendEmailWithTemplate: jest.fn().mockResolvedValue({ status: 'sent' })
+}));
+
+jest.mock('@/email/mailer', () => ({
+  startMailer: jest.fn()
 }));
 
 jest.mock('@/session', () => ({
@@ -75,6 +80,7 @@ describe('getNotifyVolunteersAction', () => {
     expect(mockSendEmailWithTemplate).toHaveBeenCalledWith({
       to: 'volunteer1@example.com',
       template: 'NotifyEmail',
+      startMailer: false,
       props: {
         subject: 'Test Subject',
         body: 'Test Body',
@@ -86,6 +92,7 @@ describe('getNotifyVolunteersAction', () => {
     expect(mockSendEmailWithTemplate).toHaveBeenCalledWith({
       to: 'volunteer2@example.com',
       template: 'NotifyEmail',
+      startMailer: false,
       props: {
         subject: 'Test Subject',
         body: 'Test Body',
@@ -127,10 +134,47 @@ describe('getNotifyVolunteersAction', () => {
     expect(mockSendEmailWithTemplate).toHaveBeenCalledWith({
       to: 'volunteer1@example.com',
       template: 'NotifyEmail',
+      startMailer: false,
       props: {
         subject: 'Test Subject',
         body: 'Test Body'
       }
     });
+  });
+
+  it('should start the mailer once after queueing all emails', async () => {
+    mockSendEmailWithTemplate.mockResolvedValue({ status: 'queued' });
+    const volunteers = [
+      { id: 'volunteer-1', email: 'volunteer1@example.com' },
+      { id: 'volunteer-2', email: 'volunteer2@example.com' }
+    ] as VolunteerInfo[];
+
+    const { getNotifyVolunteersAction } = await import('./email');
+    const result = await getNotifyVolunteersAction({
+      volunteers,
+      shiftsByVolunteerId: {},
+      event: { slug: 'event-slug' } as EventInfo,
+      teams: [],
+      acceptedRoles: []
+    })({ subject: 'Test Subject', body: 'Test Body', includeShifts: false });
+
+    expect(result).toEqual({ status: 'queued' });
+    expect(mockSendEmailWithTemplate).toHaveBeenCalledTimes(2);
+    expect(startMailer).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not start the mailer when emails were sent directly', async () => {
+    mockSendEmailWithTemplate.mockResolvedValue({ status: 'sent' });
+
+    const { getNotifyVolunteersAction } = await import('./email');
+    await getNotifyVolunteersAction({
+      volunteers: [{ id: 'volunteer-1', email: 'volunteer1@example.com' }] as VolunteerInfo[],
+      shiftsByVolunteerId: {},
+      event: { slug: 'event-slug' } as EventInfo,
+      teams: [],
+      acceptedRoles: []
+    })({ subject: 'Test Subject', body: 'Test Body', includeShifts: false });
+
+    expect(startMailer).not.toHaveBeenCalled();
   });
 });

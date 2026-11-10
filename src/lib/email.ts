@@ -5,6 +5,7 @@
  */
 
 import { sendEmailWithTemplate } from '@/email/template';
+import { startMailer } from '@/email/mailer';
 import { checkAuthorisation } from '@/session';
 
 /**
@@ -85,10 +86,14 @@ export const getNotifyVolunteersAction =
           return sendEmailWithTemplate({
             to: volunteer.email!, // we filtered out the ones without emails
             template: 'NotifyEmail',
-            props
+            props,
+            startMailer: false
           });
         })
     );
+    if (results.some((r) => r.status === 'queued')) {
+      await startMailer();
+    }
     let successStatus: 'sent' | 'queued' = 'sent';
     for (const r of results) {
       if (r.status === 'failed') {
