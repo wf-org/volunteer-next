@@ -15,4 +15,4 @@ __tests__
 *.spec.ts
 *.spec.tsx
 # Deploy config/secrets stay out of image build contexts
-deploy/*/
+deploy/**
