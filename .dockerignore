@@ -16,3 +16,13 @@ __tests__
 *.spec.tsx
 # Deploy config/secrets stay out of image build contexts
 deploy/**
+# Built as their own images; the app doesn't use them (tsconfig excludes them
+# too). Keeping them out means changing them doesn't rebuild the app.
+mailer
+upload-cleaner
+db
+# Local/test-only files
+docker-compose*.yml
+__mocks__
+jest.config.mjs
+jest.setup.mjs

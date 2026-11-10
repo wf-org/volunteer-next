@@ -39,6 +39,9 @@ POSTGRES_USER=ssm:/volunteer-next/POSTGRES_USER
 POSTGRES_PASSWORD=ssm:/volunteer-next/POSTGRES_PASSWORD
 POSTGRES_DB=ssm:/volunteer-next/POSTGRES_DB
 POSTGRES_PORT=ssm:/volunteer-next/POSTGRES_PORT
+# TLS for the individual-vars config above (node-postgres reads PGSSLMODE).
+# Neon rejects non-TLS connections with SQLSTATE 28000.
+PGSSLMODE=ssm:/volunteer-next/PGSSLMODE
 
 # SMTP (for password reset / verification emails when AUTH_MODE=credentials)
 # If unset, reset links are logged to the server console in development.
