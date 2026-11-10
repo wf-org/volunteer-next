@@ -2,16 +2,16 @@ name: Build and deploy
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'upload-cleaner/**'
-      - 'mailer/**'
-      - 'db/**'
-      - 'package.json'
-      - 'deploy/**'
-      - '.github/workflows/build-images.yml'
-      - '**/Dockerfile'
+    branches: [main,lambda-updates]
+    # paths:
+    #   - 'src/**'
+    #   - 'upload-cleaner/**'
+    #   - 'mailer/**'
+    #   - 'db/**'
+    #   - 'package.json'
+    #   - 'deploy/**'
+    #   - '.github/workflows/build-images.yml'
+    #   - '**/Dockerfile'
   workflow_dispatch:
 
 # Deploys run one at a time and are never cancelled mid-migration.
@@ -79,16 +79,9 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
-  # Stores each secret in deploy/prod/env.secrets.enc (SOPS, KMS alias/sops) as a
-  # SecureString <SSM_PATH>/<KEY>. The deploy job copies them into the web
-  # function's environment.
-  secrets:
+  deploy:
     needs: build
     runs-on: ubuntu-24.04
-    outputs:
-      keys: ${{ steps.store.outputs.keys }}
-    env:
-      SSM_PATH: /volunteer-next/prod
     steps:
       - uses: actions/checkout@v7
 
@@ -108,70 +101,56 @@ jobs:
           echo "$SOPS_SHA256  $RUNNER_TEMP/sops" | sha256sum -c -
           sudo install -m 0755 "$RUNNER_TEMP/sops" /usr/local/bin/sops
 
-      - name: Secrets to Parameter Store
-        id: store
+      # aws-lambda-deploy (v1.1.2) calls UpdateFunctionConfiguration on every run
+      # and sends the `environment` input as the function's whole environment, so
+      # migrate, mailer and upload-cleaner get their current variables passed back.
+      - name: Resolve images and environments
+        id: resolve
+        env:
+          TAG: ${{ github.sha }}
+          FUNCTIONS: |
+            migrate ${{ vars.LAMBDA_FUNCTION_MIGRATE }} ${{ vars.ECR_REPOSITORY_MIGRATIONS }}
+            mailer ${{ vars.LAMBDA_FUNCTION_MAILER }} ${{ vars.ECR_REPOSITORY_MAILER }}
+            upload_cleaner ${{ vars.LAMBDA_FUNCTION_UPLOAD_CLEANER }} ${{ vars.ECR_REPOSITORY_UPLOAD_CLEANER }}
+            web ${{ vars.LAMBDA_FUNCTION_WEB }} ${{ vars.ECR_REPOSITORY_APP }}
         run: |
           set -euo pipefail
-          umask 077
-          secrets="$RUNNER_TEMP/secrets.env"
-          trap 'rm -f "$secrets"' EXIT
-          sops -d deploy/prod/env.secrets.enc > "$secrets"
+          echo "$FUNCTIONS" | while read -r id function repository; do
+            [ -n "$id" ] || continue
+            # Deploy by digest, so the function doesn't follow a moving tag
+            digest=$(aws ecr batch-get-image \
+              --repository-name "${repository#*/}" \
+              --image-ids imageTag="$TAG" \
+              --query 'images[0].imageId.imageDigest' --output text)
+            echo "$function -> $repository@$digest"
+            echo "${id}_image=$repository@$digest" >> "$GITHUB_OUTPUT"
 
-          keys=""
-          while IFS= read -r line || [ -n "$line" ]; do
-            line="${line%$'\r'}"
-            line="${line#"${line%%[![:space:]]*}"}"
-            case "$line" in '' | '#'*) continue ;; esac
-            line="${line#export }"
-            key="${line%%=*}"
-            value="${line#*=}"
-            # Don't echo the line: it holds a secret
-            [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && "$line" == *=* ]] ||
-              { echo "::error::env.secrets.enc has a line that isn't KEY=value"; exit 1; }
-            if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then value="${BASH_REMATCH[1]}"; fi
-            if [ -z "$value" ]; then
-              echo "::warning::$key is empty in env.secrets.enc; skipped"
-              continue
-            fi
-            echo "::add-mask::$value"
-            # Value goes in on stdin, not the command line
-            jq -Rn --arg name "$SSM_PATH/$key" \
-              '{Name: $name, Value: input, Type: "SecureString", Overwrite: true}' <<< "$value" |
-              aws ssm put-parameter --cli-input-json file:///dev/stdin --output text > /dev/null
-            echo "stored $SSM_PATH/$key"
-            keys="$keys $key"
-          done < "$secrets"
-
-          [ -n "$keys" ] || { echo "::error::No secrets found in env.secrets.enc"; exit 1; }
-          echo "keys=${keys# }" >> "$GITHUB_OUTPUT"
-
-  deploy:
-    needs: secrets
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: aws-actions/configure-aws-credentials@v7
-        with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+            # The web function's environment is built in its own step
+            if [ "$id" = web ]; then continue; fi
+            environment=$(aws lambda get-function-configuration --function-name "$function" \
+              --query 'Environment.Variables' --output json | jq -c '. // {}')
+            # Action inputs are printed in the log; mask the values
+            jq -r '.[]' <<< "$environment" | while IFS= read -r value; do
+              if [ -n "$value" ]; then echo "::add-mask::$value"; fi
+            done
+            echo "${id}_environment=$environment" >> "$GITHUB_OUTPUT"
+          done
 
       # The migrate function holds POSTGRES_URL (Neon direct, not pooled, URI)
-      # in its own environment; CI only needs lambda:UpdateFunctionCode/InvokeFunction.
+      # in its own environment, which the step above passes back unchanged.
+      - name: Update migrate function
+        uses: aws-actions/aws-lambda-deploy@v1.1.2
+        with:
+          function-name: ${{ vars.LAMBDA_FUNCTION_MIGRATE }}
+          package-type: Image
+          image-uri: ${{ steps.resolve.outputs.migrate_image }}
+          environment: ${{ steps.resolve.outputs.migrate_environment }}
+
       - name: Run migrations
         env:
           FUNCTION: ${{ vars.LAMBDA_FUNCTION_MIGRATE }}
-          REPOSITORY: ${{ vars.ECR_REPOSITORY_MIGRATIONS }}
-          TAG: ${{ github.sha }}
         run: |
-          digest=$(aws ecr batch-get-image \
-            --repository-name "${REPOSITORY#*/}" \
-            --image-ids imageTag="$TAG" \
-            --query 'images[0].imageId.imageDigest' --output text)
-          aws lambda update-function-code \
-            --function-name "$FUNCTION" \
-            --image-uri "$REPOSITORY@$digest" \
-            --query 'LastUpdateStatus' --output text
+          # The action doesn't wait for the code update
           aws lambda wait function-updated --function-name "$FUNCTION"
           # Synchronous; --cli-read-timeout 0 so a long migration isn't dropped at 60s
           aws lambda invoke \
@@ -183,90 +162,97 @@ jobs:
           cat result.json; echo
           if jq -e '.FunctionError' invoke.json > /dev/null; then exit 1; fi
 
-      - name: Update functions
-        env:
-          TAG: ${{ github.sha }}
-          FUNCTIONS: |
-            ${{ vars.LAMBDA_FUNCTION_WEB }} ${{ vars.ECR_REPOSITORY_APP }}
-            ${{ vars.LAMBDA_FUNCTION_MAILER }} ${{ vars.ECR_REPOSITORY_MAILER }}
-            ${{ vars.LAMBDA_FUNCTION_UPLOAD_CLEANER }} ${{ vars.ECR_REPOSITORY_UPLOAD_CLEANER }}
-        run: |
-          echo "$FUNCTIONS" | while read -r function repository; do
-            [ -n "$function" ] || continue
-            # Deploy by digest, so the function doesn't follow a moving tag
-            digest=$(aws ecr batch-get-image \
-              --repository-name "${repository#*/}" \
-              --image-ids imageTag="$TAG" \
-              --query 'images[0].imageId.imageDigest' --output text)
-            echo "$function -> $repository@$digest"
-            aws lambda update-function-code \
-              --function-name "$function" \
-              --image-uri "$repository@$digest" \
-              --query 'LastUpdateStatus' --output text
-          done
-          # Wait for all three so a failed update fails the job
-          echo "$FUNCTIONS" | while read -r function repository; do
-            [ -n "$function" ] || continue
-            aws lambda wait function-updated --function-name "$function"
-          done
-
-      # Environment = current variables (infra-managed ones stay)
-      #             + deploy/prod/env + this run's secrets from Parameter Store.
+      # Environment = deploy/prod/env + deploy/prod/env.secrets.enc (SOPS, KMS
+      # alias/sops). It replaces the web function's whole environment.
       - name: Web function environment
-        env:
-          FUNCTION: ${{ vars.LAMBDA_FUNCTION_WEB }}
-          SECRET_KEYS: ${{ needs.secrets.outputs.keys }}
-          SSM_PATH: /volunteer-next/prod
+        id: web-env
         run: |
           set -euo pipefail
           umask 077
-          trap 'rm -f current.json params.json environment.json' EXIT
-          aws lambda get-function-configuration --function-name "$FUNCTION" \
-            --query 'Environment.Variables' --output json > current.json
+          secrets="$RUNNER_TEMP/secrets.env"
+          plain_json="$RUNNER_TEMP/plain.json"
+          secrets_json="$RUNNER_TEMP/secrets.json"
+          trap 'rm -f "$secrets" "$plain_json" "$secrets_json"' EXIT
+          sops -d deploy/prod/env.secrets.enc > "$secrets"
 
-          aws ssm get-parameters-by-path --path "$SSM_PATH" --recursive --with-decryption \
-            --query 'Parameters[].{name: Name, value: Value}' --output json > params.json
-          jq -r '.[].value' params.json | while IFS= read -r value; do echo "::add-mask::$value"; done
+          # Writes a KEY=value file to $2 as a JSON object; empty values are skipped.
+          # With $3 = secret, values are masked and lines are never echoed.
+          env_to_json() {
+            local file=$1 out=$2 kind=${3:-plain} json='{}' line key value
+            while IFS= read -r line || [ -n "$line" ]; do
+              line="${line%$'\r'}"
+              line="${line#"${line%%[![:space:]]*}"}"
+              case "$line" in '' | '#'*) continue ;; esac
+              line="${line#export }"
+              key="${line%%=*}"
+              value="${line#*=}"
+              if ! [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && "$line" == *=* ]]; then
+                if [ "$kind" = secret ]; then
+                  echo "::error::$file has a line that isn't KEY=value"
+                else
+                  echo "::error::$file has a line that isn't KEY=value: $line"
+                fi
+                exit 1
+              fi
+              if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then value="${BASH_REMATCH[1]}"; fi
+              if [ -z "$value" ]; then
+                echo "::notice::$key is empty in $file; skipped"
+                continue
+              fi
+              if [ "$kind" = secret ]; then echo "::add-mask::$value"; fi
+              json=$(jq -c --arg k "$key" --arg v "$value" '. + {($k): $v}' <<< "$json")
+            done < "$file"
+            printf '%s\n' "$json" > "$out"
+          }
 
-          plain='{}'
-          while IFS= read -r line || [ -n "$line" ]; do
-            line="${line%$'\r'}"
-            line="${line#"${line%%[![:space:]]*}"}"
-            case "$line" in '' | '#'*) continue ;; esac
-            line="${line#export }"
-            key="${line%%=*}"
-            value="${line#*=}"
-            [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && "$line" == *=* ]] ||
-              { echo "::error::deploy/prod/env has a line that isn't KEY=value: $line"; exit 1; }
-            if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then value="${BASH_REMATCH[1]}"; fi
-            if [ -z "$value" ]; then
-              echo "::notice::$key is empty in deploy/prod/env; the function keeps its current value"
-              continue
-            fi
-            if [[ " $SECRET_KEYS " == *" $key "* ]]; then
+          env_to_json "$secrets" "$secrets_json" secret
+          [ "$(jq length "$secrets_json")" -gt 0 ] ||
+            { echo "::error::No secrets found in env.secrets.enc"; exit 1; }
+          env_to_json deploy/prod/env "$plain_json"
+
+          jq -r --slurpfile secrets "$secrets_json" \
+            'keys[] | select(. as $k | $secrets[0] | has($k))' "$plain_json" |
+            while IFS= read -r key; do
               echo "::warning::$key is in both deploy/prod/env and env.secrets.enc; using the secret"
-            fi
-            plain=$(jq -c --arg k "$key" --arg v "$value" '. + {($k): $v}' <<< "$plain")
-          done < deploy/prod/env
+            done
 
-          # Only the keys stored by this run, so parameters dropped from
-          # env.secrets.enc aren't reapplied
-          jq -n \
-            --slurpfile current current.json \
-            --slurpfile params params.json \
-            --argjson plain "$plain" \
-            --arg keys "$SECRET_KEYS" \
-            --arg prefix "$SSM_PATH/" '
-            ($keys | split(" ") | map(select(length > 0))) as $wanted
-            | ($params[0] | map({key: (.name | ltrimstr($prefix)), value})
-               | map(select(.key as $k | $wanted | index($k))) | from_entries) as $secrets
-            | if ($secrets | length) != ($wanted | length)
-              then error("missing from Parameter Store: \($wanted - ($secrets | keys) | join(", "))")
-              else {Variables: (($current[0] // {}) + $plain + $secrets)} end
-          ' > environment.json
-          echo "Setting: $(jq -r '.Variables | keys | join(" ")' environment.json)"
+          environment=$(jq -cs '.[0] + .[1]' "$plain_json" "$secrets_json")
+          echo "Setting: $(jq -r 'keys | join(" ")' <<< "$environment")"
+          echo "environment=$environment" >> "$GITHUB_OUTPUT"
 
-          aws lambda update-function-configuration --function-name "$FUNCTION" \
-            --environment file://environment.json \
-            --query 'LastUpdateStatus' --output text
-          aws lambda wait function-updated --function-name "$FUNCTION"
+      - name: Update mailer function
+        uses: aws-actions/aws-lambda-deploy@v1.1.2
+        with:
+          function-name: ${{ vars.LAMBDA_FUNCTION_MAILER }}
+          package-type: Image
+          image-uri: ${{ steps.resolve.outputs.mailer_image }}
+          environment: ${{ steps.resolve.outputs.mailer_environment }}
+
+      - name: Update upload-cleaner function
+        uses: aws-actions/aws-lambda-deploy@v1.1.2
+        with:
+          function-name: ${{ vars.LAMBDA_FUNCTION_UPLOAD_CLEANER }}
+          package-type: Image
+          image-uri: ${{ steps.resolve.outputs.upload_cleaner_image }}
+          environment: ${{ steps.resolve.outputs.upload_cleaner_environment }}
+
+      - name: Update web function
+        uses: aws-actions/aws-lambda-deploy@v1.1.2
+        with:
+          function-name: ${{ vars.LAMBDA_FUNCTION_WEB }}
+          package-type: Image
+          image-uri: ${{ steps.resolve.outputs.web_image }}
+          environment: ${{ steps.web-env.outputs.environment }}
+
+      # The action doesn't wait for code updates; wait so a failed update fails the job
+      - name: Wait for functions
+        env:
+          FUNCTIONS: |
+            ${{ vars.LAMBDA_FUNCTION_MAILER }}
+            ${{ vars.LAMBDA_FUNCTION_UPLOAD_CLEANER }}
+            ${{ vars.LAMBDA_FUNCTION_WEB }}
+        run: |
+          echo "$FUNCTIONS" | while read -r function; do
+            [ -n "$function" ] || continue
+            aws lambda wait function-updated --function-name "$function"
+          done
