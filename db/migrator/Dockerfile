@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/root/.npm \
 # ============================================
 # AWS Lambda image (--target lambda); handler is lambda.handler
 # ============================================
-FROM public.ecr.aws/lambda/nodejs:24 AS lambda
+FROM public.ecr.aws/lambda/nodejs:26 AS lambda
 ENV NODE_ENV=production
 COPY --from=dependencies /app/node_modules ${LAMBDA_TASK_ROOT}/node_modules
 COPY migrator/ ${LAMBDA_TASK_ROOT}/
