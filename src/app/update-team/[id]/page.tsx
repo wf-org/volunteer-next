@@ -7,7 +7,6 @@ import { checkAuthorisation, currentUser, getCurrentEventOrRedirect } from '@/se
 import { inTransaction } from '@/db';
 import TeamForm from '@/ui/team-form';
 import { validateExistingTeam } from '@/validator/team-validator';
-import { validateUserIds } from '@/validator/user-validator';
 import { deleteTeam, getTeamById, updateTeam } from '@/service/team-service';
 import { usersToVolunteers } from '@/lib/volunteer';
 import { getPermissionsProfile } from '@/utils/permissions';
@@ -16,10 +15,36 @@ import { hasEventStarted } from '@/utils/date';
 
 const PAGE_KEY = 'UpdateTeamPage';
 
+const parseRequireTeamLead = (value: string | undefined): boolean => {
+  if (!value) {
+    return true;
+  }
+  return value.split(/\s+#/)[0].trim().toLowerCase() === 'true';
+};
+
+const getTeamLeadIds = (data: FormData, requireTeamLead: boolean): string[] => {
+  const teamLeadIds = data
+    .getAll('teamleadId')
+    .map((value) => value.toString().trim())
+    .filter((id) => id.length > 0);
+
+  if (requireTeamLead && teamLeadIds.length === 0) {
+    throw new Error('At least one team lead is required');
+  }
+
+  return teamLeadIds;
+};
+
+const setDifference = <T,>(setA: Set<T>, setB: Set<T>): Set<T> => {
+  return new Set(Array.from(setA).filter((item) => !setB.has(item)));
+};
+
 export const generateMetadata = metadata(PAGE_KEY);
 
 export default async function UpdateTeam({ params, searchParams }: PageProps<'/update-team/[id]'>) {
   const { id } = await params;
+  const defaultContactAddress = process.env.DEFAULT_TEAM_CONTACT_ADDRESS?.trim();
+  const requireTeamLead = parseRequireTeamLead(process.env.REQUIRE_TEAM_LEAD);
   const redirectTo = getCallbackUrl(await searchParams) || getTeamsPath();
   const event = await getCurrentEventOrRedirect();
   const team = id ? await getTeamById(id) : null;
@@ -52,10 +77,10 @@ export default async function UpdateTeam({ params, searchParams }: PageProps<'/u
     await checkAuthorisation(authorisedRoles);
 
     const roleToAdd: UserRole = { type: 'team-lead', eventId: newTeam.eventId, teamId: newTeam.id };
-    const newTeamleads = new Set(validateUserIds(data, 'teamleadId'));
+    const newTeamleads = new Set(getTeamLeadIds(data, requireTeamLead));
     const existingTeamleads = new Set((await getUsersWithRole(roleToAdd)).map(({ id }) => id));
-    const toRemove = existingTeamleads.difference(newTeamleads);
-    const toAdd = newTeamleads.difference(existingTeamleads);
+    const toRemove = setDifference(existingTeamleads, newTeamleads);
+    const toAdd = setDifference(newTeamleads, existingTeamleads);
     await inTransaction(async (client) => {
       await updateTeam(newTeam, client);
       if (toRemove.size > 0) {
@@ -93,6 +118,8 @@ export default async function UpdateTeam({ params, searchParams }: PageProps<'/u
         backOnCancel
         editingTeam={team}
         editingTeamleads={teamleads}
+        defaultContactAddress={defaultContactAddress}
+        requireTeamLead={requireTeamLead}
       />
     </Flex>
   );

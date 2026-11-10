@@ -1,5 +1,5 @@
 import metadata from '@/i18n/metadata';
-import { Heading, Flex, Button, Text, Badge } from '@radix-ui/themes';
+import { Heading, Flex, Button, Text, Badge, Card } from '@radix-ui/themes';
 import { getTranslations } from 'next-intl/server';
 import { checkAuthorisation, currentUser, getCurrentEvent } from '@/session';
 import { getFilteredUsers } from '@/service/user-service';
@@ -19,16 +19,18 @@ import { recordToUserFilters } from '@/utils/user-filters';
 import { getPermissionsProfile } from '@/utils/permissions';
 import NextLink from 'next/link';
 import { getHoursForVolunteers } from '@/service/shift-service';
+import ImportVolunteersButton from '@/ui/import-volunteers-button';
 
 const PAGE_KEY = 'UsersDashboardPage';
 export const generateMetadata = metadata(PAGE_KEY);
 
 export default async function UsersDashboardPage({ searchParams }: PageProps<'/user'>) {
+  const resolvedSearchParams = await searchParams;
   const editors: UserRole[] = [{ type: 'admin' }];
   const canEdit = await checkAuthorisation(editors, true);
   const permissionsProfile = getPermissionsProfile(await currentUser());
   const t = await getTranslations(PAGE_KEY);
-  const filters = recordToUserFilters(await searchParams);
+  const filters = recordToUserFilters(resolvedSearchParams);
   const event = await getCurrentEvent();
   const users = await getFilteredUsers(filters, permissionsProfile, event?.id);
   const volunteers = usersToVolunteers(users, permissionsProfile);
@@ -97,11 +99,58 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
     }
   }
 
+  const getValue = (key: string): string | undefined => {
+    const value = resolvedSearchParams[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const importStatus = getValue('importStatus');
+  const attendeeCount = Number(getValue('attendeeCount') ?? 0);
+  const createdCount = Number(getValue('createdCount') ?? 0);
+  const updatedCount = Number(getValue('updatedCount') ?? 0);
+  const undeletedCount = Number(getValue('undeletedCount') ?? 0);
+
   return (
     <Flex direction="column" gap="4">
       <Heading my="4" as="h1" align="center">
         {t('title')}
       </Heading>
+      {importStatus === 'success' && (
+        <Card
+          style={
+            {
+              '--card-background-color': 'var(--green-3)',
+              borderColor: 'var(--green-8)'
+            } as React.CSSProperties
+          }
+        >
+          <Flex direction="column" gap="1">
+            <Text weight="bold">{t('importVolunteersSuccessTitle')}</Text>
+            <Text>
+              {t('importVolunteersSuccessMessage', {
+                attendeeCount,
+                createdCount,
+                updatedCount,
+                undeletedCount
+              })}
+            </Text>
+          </Flex>
+        </Card>
+      )}
+      {importStatus === 'failure' && (
+        <Card
+          style={
+            {
+              '--card-background-color': 'var(--red-3)',
+              borderColor: 'var(--red-8)'
+            } as React.CSSProperties
+          }
+        >
+          <Flex direction="column" gap="1">
+            <Text weight="bold">{t('importVolunteersFailureTitle')}</Text>
+            <Text>{t('importVolunteersFailureMessage')}</Text>
+          </Flex>
+        </Card>
+      )}
       <Flex gap="2" mb="4">
         {canEdit && (
           <Button variant="soft" asChild>
@@ -109,6 +158,9 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
               <PlusIcon /> {t('createUser')}
             </NextLink>
           </Button>
+        )}
+        {canEdit && (
+          <ImportVolunteersButton />
         )}
         <Button variant="soft" asChild>
           <NextLink

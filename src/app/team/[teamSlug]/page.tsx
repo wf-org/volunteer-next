@@ -2,6 +2,7 @@ import { inTransaction } from '@/db';
 import metadata from '@/i18n/metadata';
 import { sendUserShiftEmail } from '@/lib/email';
 import { getDeleteShiftAction, getSaveShiftAction } from '@/lib/shifts';
+import { hasValidPretixTicketForEvent, isPretixTicketCheckEnabled } from '@/lib/pretix-ticket';
 import {
   getQualificationsForEvent,
   getQualificationsForUser
@@ -32,7 +33,7 @@ import {
   getPermissionsProfile
 } from '@/utils/permissions';
 import { recordToShiftFilters } from '@/utils/shift-filters';
-import { Flex, Heading } from '@radix-ui/themes';
+import { Card, Flex, Heading, Text } from '@radix-ui/themes';
 import { getTranslations } from 'next-intl/server';
 import { revalidatePath } from 'next/cache';
 import { notFound, unauthorized } from 'next/navigation';
@@ -81,6 +82,9 @@ export default async function TeamPage({ params, searchParams }: PageProps<`/tea
   const isEditable = !hasEventStarted(event) && hasAccess;
   const t = await getTranslations(PAGE_KEY);
   const user = (await currentUser())!; // checkAuthorisation guarantees this is not null
+  const ticketChecksEnabled = isPretixTicketCheckEnabled();
+  const userHasValidTicket =
+    !ticketChecksEnabled || (await hasValidPretixTicketForEvent(user.email, event.slug));
   const permissions = getPermissionsProfile(user);
   const shiftVolunteers = await getVolunteersForShifts(
     shifts.map((s) => s.id),
@@ -110,6 +114,10 @@ export default async function TeamPage({ params, searchParams }: PageProps<`/tea
     'use server';
     if (!permissions.userId) {
       unauthorized();
+    }
+    const hasValidTicket = await hasValidPretixTicketForEvent(user.email, event.slug);
+    if (!hasValidTicket) {
+      throw new Error('Valid event ticket required to sign up for shifts');
     }
     const shift = await getShiftById(shiftId);
     if (!shift) {
@@ -192,6 +200,21 @@ export default async function TeamPage({ params, searchParams }: PageProps<`/tea
           {t('title')}
         </Heading>
       )}
+      {ticketChecksEnabled && !userHasValidTicket && (
+        <Card
+          style={
+            {
+              '--card-background-color': 'var(--amber-3)',
+              borderColor: 'var(--amber-8)'
+            } as React.CSSProperties
+          }
+        >
+          <Flex direction="column" gap="1">
+            <Text weight="bold">{t('ticketRequiredBannerTitle')}</Text>
+            <Text>{t('ticketRequiredBannerDescription')}</Text>
+          </Flex>
+        </Card>
+      )}
       <ShiftList
         event={event}
         teamId={team.id}
@@ -204,7 +227,7 @@ export default async function TeamPage({ params, searchParams }: PageProps<`/tea
         onSaveShift={isEditable ? onSaveShift : undefined}
         onDeleteShift={isEditable ? onDeleteShift : undefined}
         editableShifts={editableShifts}
-        onSignup={onSignup}
+        onSignup={userHasValidTicket ? onSignup : undefined}
         onCancel={onCancel}
       />
     </Flex>

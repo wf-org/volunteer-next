@@ -6,11 +6,11 @@
 
 'use client';
 
-import { Button, Dialog, Flex, TextField, Text, Checkbox, Select } from '@radix-ui/themes';
+import { Button, Dialog, Flex, TextField, Text, Checkbox, Select, TextArea } from '@radix-ui/themes';
 import { useTranslations } from 'next-intl';
 import { EventDaySelect, TimeSelect } from '@/ui/datepicker';
 import FormDialog, { FormField } from '@/ui/form-dialog';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import DeleteButton from '@/ui/delete-button';
 
 interface BaseProps {
@@ -44,12 +44,31 @@ export default function ShiftDialog({
   const title = t(editing ? (editing.id ? 'editShift' : 'copyShift') : 'addShift');
   const [currentMin, setCurrentMin] = useState<number>(editing?.minVolunteers ?? 0);
   const [currentTeam, setCurrentTeam] = useState<TeamId | undefined>(editing?.teamId ?? teamId);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockedRef = useRef(false);
+
+  const onSubmitOnce = async (data: FormData) => {
+    if (submitLockedRef.current || !onSubmit) {
+      return;
+    }
+    submitLockedRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await onSubmit(data);
+    } finally {
+      submitLockedRef.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (open) {
       setCurrentTeam(editing?.teamId ?? teamId);
       setCurrentMin(editing?.minVolunteers ?? 0);
+      setIsSubmitting(false);
+      submitLockedRef.current = false;
     }
-  }, [open]);
+  }, [open, editing?.teamId, editing?.minVolunteers, teamId]);
   const qualificationOptions = qualifications.filter((q) => !q.teamId || q.teamId === currentTeam);
   return (
     <FormDialog description={title} open={open} onClose={onClose}>
@@ -111,6 +130,19 @@ export default function ShiftDialog({
               required
             />
           </FormField>
+          <FormField
+            ariaId="shift-description"
+            name={t('description')}
+            description={t('descriptionDescription')}
+          >
+            <TextArea
+              defaultValue={editing?.description ?? ''}
+              aria-labelledby="shift-description"
+              name="description"
+              placeholder={t('descriptionPlaceholder')}
+              rows={4}
+            />
+          </FormField>
           <FormField ariaId="shift-day" name={t('shiftDay')} description={t('shiftDayDescription')}>
             <EventDaySelect
               startDate={startDate}
@@ -140,6 +172,20 @@ export default function ShiftDialog({
               min={1}
               defaultValue={editing?.durationHours ?? 0}
               required
+            />
+          </FormField>
+          <FormField
+            ariaId="shift-volunteer-hours"
+            name={t('volunteerHours')}
+            description={t('volunteerHoursDescription')}
+          >
+            <TextField.Root
+              aria-labelledby="shift-volunteer-hours"
+              name="volunteerHours"
+              type="number"
+              min={1}
+              placeholder={t('volunteerHoursPlaceholder')}
+              defaultValue={editing?.volunteerHours ?? ''}
             />
           </FormField>
           <FormField
@@ -210,7 +256,12 @@ export default function ShiftDialog({
               {t('cancel')}
             </Button>
           </Dialog.Close>
-          <Button variant="soft" formAction={onSubmit} data-umami-event="Save shift dialog">
+          <Button
+            variant="soft"
+            formAction={onSubmitOnce}
+            disabled={isSubmitting}
+            data-umami-event="Save shift dialog"
+          >
             {t('save')}
           </Button>
         </Flex>

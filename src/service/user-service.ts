@@ -192,7 +192,7 @@ export const getFilteredUsers = cache(
       queryParts.push(
         `
         (
-        SELECT COALESCE(SUM(s."durationHours"), 0)
+        SELECT COALESCE(SUM(COALESCE(s."volunteerHours", s."durationHours")), 0)
         FROM shift_volunteer sv 
         JOIN shift s ON s.id=sv.shift_id 
         JOIN team t ON s."teamId" = t.id

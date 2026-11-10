@@ -9,22 +9,14 @@
 
 import { Flex, Text } from '@radix-ui/themes';
 import { ClockIcon } from '@radix-ui/react-icons';
-import { stringToTime } from '@/utils/datetime';
+import { stringToTime, to12HourTimeString } from '@/utils/datetime';
 
-const TIME_OPTIONS: Intl.DateTimeFormatOptions = {
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-  timeZone: 'UTC' // this is because we're using "Z" to represent "event timezone", so we want to display the time as-is without any timezone conversion
-};
-//Helper functions for Displaying Overnight and multi-day shifts
-const DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
+const DATE_TIME_OPTIONS_BASE: Intl.DateTimeFormatOptions = {
   weekday: 'short',
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
-  hour12: false,
   timeZone: 'UTC'
 };
 
@@ -33,32 +25,46 @@ const isSameDisplayDay = (a: Date, b: Date) =>
   a.getUTCMonth() === b.getUTCMonth() &&
   a.getUTCDate() === b.getUTCDate();
 
-const formatTime = (date: Date) =>
-  date.toLocaleTimeString([], TIME_OPTIONS);
+const formatTime = (date: Date, use12Hour: boolean) =>
+  date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: use12Hour,
+    timeZone: 'UTC' // this is because we're using "Z" to represent "event timezone", so we want to display the time as-is without any timezone conversion
+  });
 
-const formatDateTime = (date: Date) =>
-  date.toLocaleString([], DATE_TIME_OPTIONS);
+const formatDateTime = (date: Date, use12Hour: boolean) =>
+  date.toLocaleString([], {
+    ...DATE_TIME_OPTIONS_BASE,
+    hour12: use12Hour
+  });
 
 interface Props {
   start: Date | TimeString;
   end: Date | TimeString;
+  timeFormat?: '12h' | '24h';
 }
 
-export default function TimeSpan({ start, end }: Props) {
+export default function TimeSpan({ start, end, timeFormat = '24h' }: Props) {
   const bothAreDates = start instanceof Date && end instanceof Date;
   const multiDay = bothAreDates && !isSameDisplayDay(start, end);
+  const use12Hour = timeFormat === '12h';
 
- const startTime =
+  const startTime =
     start instanceof Date
-      ? formatTime(start)
-      : stringToTime(start);
+      ? formatTime(start, use12Hour)
+      : use12Hour
+        ? to12HourTimeString(stringToTime(start))
+        : stringToTime(start);
 
   const endTime =
     end instanceof Date
       ? multiDay
-        ? formatDateTime(end)
-        : formatTime(end)
-      : stringToTime(end);
+        ? formatDateTime(end, use12Hour)
+        : formatTime(end, use12Hour)
+      : use12Hour
+        ? to12HourTimeString(stringToTime(end))
+        : stringToTime(end);
 
   return (
     <Flex asChild align="center" gap="2">
