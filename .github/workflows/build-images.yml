@@ -2,7 +2,7 @@ name: Build and deploy
 
 on:
   push:
-    branches: [main,lamba]
+    branches: [main]
   workflow_dispatch:
 
 # Deploys run one at a time and are never cancelled mid-migration.
