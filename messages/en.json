@@ -23,7 +23,11 @@
     "signUp": "Sign up",
     "signUpDescription": "Sign up for at least one shift and review any details. Visit your shifts page to manage and see your upcoming shift(s).",
     "showUp": "Show up & connect",
-    "showUpDescription": "Meet others and support your team! Your participation helps build a stronger, more vibrant community for everyone."
+    "showUpDescription": "Meet others and support your team! Your participation helps build a stronger, more vibrant community for everyone.",
+    "ticketStatusTitle": "No valid ticket",
+    "ticketStatusNoTicket": "We couldn’t find a valid ticket for this event linked to your email address. You need a ticket to sign up for shifts.",
+    "minimumHoursTitle": "Volunteer hours needed",
+    "minimumHoursDescription": "This event asks each volunteer for at least {required} hours. You have {current}, so {remaining} more to go."
   },
   "CreateEventPage": {
     "title": "Create Event"
@@ -36,7 +40,9 @@
     "description": "Select a team to view and sign up for shifts.",
     "descriptionAdmin": "Select a team to manage its shifts or create a shift directly.",
     "createTeam": "Add team",
-    "edit": "Edit Team: {teamName}"
+    "edit": "Edit Team: {teamName}",
+    "ticketRequiredBannerTitle": "Ticket required",
+    "ticketRequiredBannerDescription": "You need a valid ticket for this event to sign up for shifts."
   },
   "CreateTeamPage": {
     "title": "Create Team"
@@ -56,7 +62,9 @@
     },
     "InfoTab": {},
     "ShiftsTab": {
-      "title": "Shifts"
+      "title": "Shifts",
+      "ticketRequiredBannerTitle": "Ticket required",
+      "ticketRequiredBannerDescription": "You need a valid ticket for this event to sign up for shifts."
     },
     "VolunteersTab": {
       "title": "Volunteers",
@@ -171,7 +179,14 @@
     "confirmDeleteText": "Are you sure you want to delete \"{userName}\"? The record will be permanently deleted after 30 days.",
     "undelete": "Undelete",
     "export": "Export volunteers",
-    "hoursLabel": "Event Hours"
+    "hoursLabel": "Event Hours",
+    "importVolunteers": "Import volunteers from Pretix",
+    "importVolunteersPending": "Importing…",
+    "importVolunteersProcessingHint": "This can take a minute for large events.",
+    "importVolunteersSuccessTitle": "Import complete",
+    "importVolunteersSuccessMessage": "Found {attendeeCount} attendees: {createdCount} added, {updatedCount} updated, {undeletedCount} restored.",
+    "importVolunteersFailureTitle": "Import failed",
+    "importVolunteersFailureMessage": "Couldn’t import volunteers from Pretix. Check the server logs and try again."
   },
   "CreateUserPage": {
     "title": "Create User",
@@ -200,7 +215,6 @@
     "title": "No events",
     "description": "There are currently no events available. Please check back later or contact your event organiser for more information."
   },
-
   "ResetPasswordEmail": {
     "subject": "Reset your password",
     "text": "Click the link to reset your password: {url}"
@@ -215,7 +229,6 @@
   "NotifyEmail": {
     "yourShifts": "Here are the shifts you have signed up for:"
   },
-
   "AuthContainer": {
     "logo": "Logo image"
   },
@@ -247,7 +260,14 @@
     "faviconDescription": "Select a 16x16px image to upload. Supported file types are ICO, SVG, PNG, JPG, and WEBP.",
     "createButton": "Create Event",
     "updateButton": "Update Event",
-    "cancelButton": "Cancel"
+    "cancelButton": "Cancel",
+    "requiredVolunteerHours": "Required volunteer hours",
+    "requiredVolunteerHoursDescription": "Minimum hours each volunteer should sign up for. 0 means no minimum.",
+    "requiredVolunteerHoursPlaceholder": "0",
+    "timeFormat": "Time format",
+    "timeFormatDescription": "How shift times are shown for this event",
+    "timeFormat24h": "24-hour (14:00)",
+    "timeFormat12h": "12-hour (2:00 PM)"
   },
   "EventCard": {
     "dateSpan": "{startDate} to {endDate}",
@@ -398,7 +418,13 @@
     "active": "Active",
     "requirements": "Shift Requirements",
     "requirementsDescription": "Qualifications that volunteers must have to sign up for this shift. Optional.",
-    "none": "None"
+    "none": "None",
+    "description": "Description",
+    "descriptionDescription": "Shown to volunteers. Supports Markdown. Shared by all shifts with the same title in this event.",
+    "descriptionPlaceholder": "What volunteers will do on this shift",
+    "volunteerHours": "Volunteer hours",
+    "volunteerHoursDescription": "Hours credited for this shift. Leave blank to use the shift length.",
+    "volunteerHoursPlaceholder": "Shift length"
   },
   "ManageQualifications": {
     "add": "Add Qualification",
@@ -471,7 +497,9 @@
     "addShift": "Add shift"
   },
   "ImageSelector": {
-    "selectImage": "Choose a File"
+    "selectImage": "Choose a File",
+    "fileTooLarge": "File is too large. The maximum size is {maxSize}.",
+    "uploadFailed": "Upload failed. Please try again."
   },
   "EventDaySelect": {
     "day": "{parent} day",

@@ -1,5 +1,0 @@
-FROM liquibase/liquibase
-
-COPY ./db/changelog.xml /liquibase/changelog.xml
-COPY ./db/scripts /liquibase/scripts
-COPY ./db/drivers /liquibase/lib
