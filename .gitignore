@@ -50,3 +50,6 @@ next-env.d.ts
 
 #Caddyfile (for local SSL Testing)
 Caddyfile
+
+# Encrypted environment secrets
+*.decrypted~env.secrets.enc
