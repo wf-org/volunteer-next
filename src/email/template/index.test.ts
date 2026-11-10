@@ -95,6 +95,11 @@ describe('sendEmailWithTemplate', () => {
       queueEmail: mockQueueEmail
     }));
 
+    const mockStartMailer = jest.fn();
+    jest.mock('@/email/mailer', () => ({
+      startMailer: mockStartMailer
+    }));
+
     const mockRenderToStaticMarkup = jest.fn().mockReturnValue('<p>Hello, John!</p>');
     jest.mock('react-dom/server', () => ({
       renderToStaticMarkup: mockRenderToStaticMarkup
@@ -123,5 +128,36 @@ describe('sendEmailWithTemplate', () => {
       body: '<p>Hello, John!</p>'
     });
     expect(result).toEqual<SendEmailResult>({ status: 'queued' });
+    expect(mockStartMailer).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not start the mailer when startMailer is false', async () => {
+    process.env.USE_EMAIL_QUEUE = 'true';
+
+    jest.mock('@/service/email-service', () => ({
+      queueEmail: jest.fn()
+    }));
+    const mockStartMailer = jest.fn();
+    jest.mock('@/email/mailer', () => ({
+      startMailer: mockStartMailer
+    }));
+    jest.mock('react-dom/server', () => ({
+      renderToStaticMarkup: jest.fn().mockReturnValue('<p>Hi</p>')
+    }));
+    jest.mock('@/email/template/ShiftEmail', () => ({
+      body: jest.fn(async () => '<p>Hi</p>'),
+      subject: jest.fn(async () => 'Hi')
+    }));
+
+    const { sendEmailWithTemplate } = await import('./index');
+    const result = await sendEmailWithTemplate({
+      to: 'john@example.com',
+      template: 'ShiftEmail',
+      props: { name: 'John' } as any,
+      startMailer: false
+    });
+
+    expect(result).toEqual<SendEmailResult>({ status: 'queued' });
+    expect(mockStartMailer).not.toHaveBeenCalled();
   });
 });
