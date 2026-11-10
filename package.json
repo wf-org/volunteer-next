@@ -72,7 +72,7 @@
     "next-intl": "^4.5.8",
     "prettier": "^3.7.4",
     "tailwindcss": "^4",
-    "typescript": "^5",
+    "typescript": "^7",
     "use-debounce": "^10.1.0"
   },
   "overrides": {
