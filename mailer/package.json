@@ -5,10 +5,10 @@
   "dependencies": {
     "@types/html-to-text": "^9.0.4",
     "@types/nodemailer": "^7.0.11",
-    "@types/pg": "^8.20.0",
+    "@types/pg": "^8.23.1",
     "html-to-text": "^9.0.5",
-    "node-cron": "^4.2.1",
+    "node-cron": "^4.6.0",
     "nodemailer": "^8.0.4",
-    "pg": "^8.20.0"
+    "pg": "^8.23.1"
   }
 }
