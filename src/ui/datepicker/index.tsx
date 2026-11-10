@@ -175,9 +175,22 @@ interface TimeSelectProps {
   onChange?: (time: TimeString) => void;
   required?: boolean;
   ariaLabel: string;
+  timeFormat?: '12h' | '24h';
 }
 
-export function TimeSelect({ name, defaultValue, onChange, required, ariaLabel }: TimeSelectProps) {
+const formatHourLabel = (hour: number, timeFormat: '12h' | '24h') =>
+  timeFormat === '12h'
+    ? `${hour % 12 || 12} ${hour >= 12 ? 'PM' : 'AM'}`
+    : hour.toString().padStart(2, '0');
+
+export function TimeSelect({
+  name,
+  defaultValue,
+  onChange,
+  required,
+  ariaLabel,
+  timeFormat = '24h'
+}: TimeSelectProps) {
   const [defaultHour, defaultMinute] = defaultValue
     ? defaultValue.split(':').map((part) => parseInt(part, 10))
     : [undefined, undefined];
@@ -202,7 +215,7 @@ export function TimeSelect({ name, defaultValue, onChange, required, ariaLabel }
         <Select.Content>
           {Array.from({ length: 24 }, (_, i) => (
             <Select.Item key={i} value={i.toString()}>
-              {i.toString().padStart(2, '0')}
+              {formatHourLabel(i, timeFormat)}
             </Select.Item>
           ))}
         </Select.Content>

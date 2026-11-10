@@ -22,6 +22,7 @@ export default function AddShiftButton({ event, teams, qualifications, onSaveShi
         <PlusIcon /> {t('addShift')}
       </Button>
       <ShiftDialog
+        timeFormat={event.timeFormat}
         startDate={event.startDate}
         teams={teams}
         qualifications={qualifications}

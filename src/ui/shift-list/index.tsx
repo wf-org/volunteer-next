@@ -136,6 +136,7 @@ export default function ShiftList({
       </Flex>
       {canEdit && (
         <ShiftDialog
+          timeFormat={event.timeFormat}
           startDate={event.startDate}
           teamId={teamId}
           qualifications={qualifications}

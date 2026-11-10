@@ -21,6 +21,7 @@ interface BaseProps {
   onClose?: () => void;
   onSubmit?: (data: FormData) => Promise<void>;
   onDelete?: (shiftId: ShiftId) => Promise<void>;
+  timeFormat?: '12h' | '24h';
 }
 
 type PropsWithTeam = BaseProps & { teamId: TeamId; teams?: never };
@@ -37,7 +38,8 @@ export default function ShiftDialog({
   editing = undefined,
   onClose,
   onSubmit,
-  onDelete
+  onDelete,
+  timeFormat
 }: Props) {
   const open = creating || Boolean(editing);
   const t = useTranslations('ShiftDialog');
@@ -162,6 +164,7 @@ export default function ShiftDialog({
               ariaLabel={t('shiftTime')}
               name="shift-time"
               required
+              timeFormat={timeFormat}
             />
           </FormField>
           <FormField ariaId="shift-length" name={t('length')} description={t('lengthDescription')}>

@@ -121,6 +121,7 @@ export default function ShiftOverviewList({
       />
       {isEditable && (
         <ShiftDialog
+          timeFormat={event.timeFormat}
           teams={teams}
           startDate={event.startDate}
           qualifications={qualifications}
