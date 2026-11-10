@@ -57,7 +57,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/html-to-text": "^9.0.4",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24",
+    "@types/node": "^26",
     "@types/nodemailer": "^7.0.9",
     "@types/pg": "^8.15.6",
     "@types/react": "19.2.7",
