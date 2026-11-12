@@ -211,7 +211,12 @@
     "select": "Select...",
     "assignQualification": "Assign Qualification",
     "edit": "Edit Profile",
-    "signOut": "Sign Out"
+    "signOut": "Sign Out",
+    "shifts": "Shifts",
+    "noShifts": "Not signed up for any shifts.",
+    "assignShiftLabel": "Assign Shift to Volunteer",
+    "assignShiftDescription": "Active shifts that haven't ended and have space",
+    "assignShift": "Assign Shift"
   },
   "NoEventsPage": {
     "title": "No events",
@@ -278,7 +283,7 @@
   },
   "TeamCard": {
     "volunteers": "Volunteers",
-    "signup": "Sign up",
+    "signup": "View Shifts",
     "full": "All shifts filled"
   },
   "VolunteerFilters": {

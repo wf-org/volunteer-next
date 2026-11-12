@@ -14,6 +14,16 @@ import { getCurrentEvent, checkAuthorisation, getMatchingRoles } from '@/session
 import { Theme } from '@radix-ui/themes';
 import { getPermissionsProfile } from '@/utils/permissions';
 import { hasEventEnded } from '@/utils/date';
+import {
+  addVolunteerToShift,
+  getShiftById,
+  getShiftSignupCount,
+  getShiftsForEvent,
+  getShiftsForVolunteer
+} from '@/service/shift-service';
+import { getVolunteersForShifts, getUser } from '@/service/user-service';
+import { sendUserShiftEmail } from '@/lib/email';
+import { isValidElement, type ReactNode } from 'react';
 
 jest.mock('next-intl', () => ({
   useTranslations: () => (key: string) => key,
@@ -57,7 +67,28 @@ jest.mock('next/navigation', () => ({
   redirect: jest.fn()
 }));
 jest.mock('@/utils/permissions', () => ({
-  getPermissionsProfile: jest.fn().mockReturnValue({ id: 'permissionsProfile' })
+  getPermissionsProfile: jest.fn().mockReturnValue({ id: 'permissionsProfile' }),
+  canSignupForShift: jest.fn().mockReturnValue(true),
+  canCancelShiftSignup: jest.fn().mockReturnValue(true)
+}));
+jest.mock('@/service/shift-service', () => ({
+  addVolunteerToShift: jest.fn(),
+  getShiftById: jest.fn(),
+  getShiftLock: jest.fn(),
+  getShiftSignupCount: jest.fn().mockResolvedValue(0),
+  getShiftsForEvent: jest.fn().mockResolvedValue([]),
+  getShiftsForVolunteer: jest.fn().mockResolvedValue([]),
+  removeVolunteerFromShift: jest.fn()
+}));
+jest.mock('@/service/user-service', () => ({
+  getUser: jest.fn(),
+  getVolunteersForShifts: jest.fn().mockResolvedValue({})
+}));
+jest.mock('@/db', () => ({
+  inTransaction: jest.fn(async (fn: (client: unknown) => unknown) => fn({}))
+}));
+jest.mock('@/lib/email', () => ({
+  sendUserShiftEmail: jest.fn().mockResolvedValue({ status: 'sent' })
 }));
 jest.mock('@/auth', () => ({
   auth: {
@@ -475,5 +506,133 @@ describe('UserProfilePage', () => {
     expect(screen.getByLabelText('addQualification')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('addQualification'));
     expect(screen.getByRole('option', { name: 'Qualification 1' })).toBeInTheDocument();
+  });
+  describe('shift assignment', () => {
+    const makeShift = (overrides: Partial<ShiftInfo>): ShiftInfo => ({
+      id: 'shift1',
+      teamId: 'team1',
+      isActive: true,
+      title: 'Gate',
+      eventDay: 0,
+      startTime: '09:00' as TimeString,
+      durationHours: 2,
+      minVolunteers: 0,
+      maxVolunteers: 2,
+      requirements: [],
+      ...overrides
+    });
+
+    // Finds the server action passed as formAction to the "assignShift" button
+    const findAssignAction = (node: ReactNode): ((data: FormData) => Promise<void>) | undefined => {
+      if (Array.isArray(node)) {
+        for (const child of node) {
+          const found = findAssignAction(child);
+          if (found) return found;
+        }
+        return undefined;
+      }
+      if (!isValidElement(node)) return undefined;
+      const props = node.props as { formAction?: unknown; children?: ReactNode };
+      const children = [props.children].flat();
+      if (typeof props.formAction === 'function' && children.includes('assignShift')) {
+        return props.formAction as (data: FormData) => Promise<void>;
+      }
+      return findAssignAction(props.children);
+    };
+
+    const renderAsAdmin = async () => {
+      mockGetVolunteer.mockResolvedValue(mockVolunteer);
+      mockGetCurrentEvent.mockResolvedValue(mockEvent);
+      mockCheckAuthorisation.mockResolvedValue(true);
+      mockGetQualificationsForUser.mockResolvedValue([]);
+      mockGetQualificationsForEvent.mockResolvedValue([]);
+      mockGetQualificationsForTeams.mockResolvedValue([]);
+      mockGetTeamsForEvent.mockResolvedValue(mockTeams);
+      mockGetTeamsById.mockResolvedValue(mockTeams);
+      const page = await UserProfilePage({
+        params: Promise.resolve({ userId: '1' }),
+        searchParams: Promise.resolve({})
+      });
+      render(<Theme>{page}</Theme>);
+      return page;
+    };
+
+    const formWithShift = (shiftId: string) => {
+      const data = new FormData();
+      data.set('shift-id', shiftId);
+      return data;
+    };
+
+    it('lists only shifts the volunteer can be assigned to', async () => {
+      (getShiftsForEvent as jest.Mock).mockResolvedValue([
+        makeShift({ id: 'open', title: 'Open shift' }),
+        makeShift({ id: 'full', title: 'Full shift', maxVolunteers: 1 }),
+        makeShift({ id: 'inactive', title: 'Inactive shift', isActive: false }),
+        makeShift({ id: 'mine', title: 'Already assigned' })
+      ]);
+      (getShiftsForVolunteer as jest.Mock).mockResolvedValue([
+        makeShift({ id: 'mine', title: 'Already assigned' })
+      ]);
+      (getVolunteersForShifts as jest.Mock).mockResolvedValue({ full: [mockVolunteer] });
+
+      await renderAsAdmin();
+      fireEvent.click(screen.getByLabelText('assignShiftLabel'));
+      const options = screen.getAllByRole('option').map((option) => option.textContent);
+      expect(options).toHaveLength(1);
+      expect(options[0]).toContain('Open shift');
+    });
+
+    it('does not show shift assignment to non-admins', async () => {
+      mockGetVolunteer.mockResolvedValue(mockVolunteer);
+      mockGetCurrentEvent.mockResolvedValue(mockEvent);
+      mockCheckAuthorisation.mockResolvedValue(false);
+      mockGetMatchingRoles.mockResolvedValue([]);
+      mockGetQualificationsForUser.mockResolvedValue([]);
+      mockGetTeamsById.mockResolvedValue([]);
+      const page = await UserProfilePage({
+        params: Promise.resolve({ userId: '1' }),
+        searchParams: Promise.resolve({})
+      });
+      render(<Theme>{page}</Theme>);
+      expect(screen.queryByLabelText('assignShiftLabel')).not.toBeInTheDocument();
+      expect(getShiftsForEvent).not.toHaveBeenCalled();
+    });
+
+    it('assigns the shift and emails the volunteer', async () => {
+      const shift = makeShift({ id: 'open' });
+      (getShiftsForEvent as jest.Mock).mockResolvedValue([shift]);
+      (getShiftById as jest.Mock).mockResolvedValue(shift);
+      (getShiftSignupCount as jest.Mock).mockResolvedValue(1);
+      (getUser as jest.Mock).mockResolvedValue({ id: '1', email: 'email', roles: [] });
+
+      const page = await renderAsAdmin();
+      await findAssignAction(page)!(formWithShift('open'));
+
+      expect(addVolunteerToShift).toHaveBeenCalledWith('open', '1', expect.anything());
+      expect(sendUserShiftEmail).toHaveBeenCalled();
+    });
+
+    it('rejects a full shift', async () => {
+      const shift = makeShift({ id: 'open', maxVolunteers: 2 });
+      (getShiftById as jest.Mock).mockResolvedValue(shift);
+      (getShiftSignupCount as jest.Mock).mockResolvedValue(2);
+
+      const page = await renderAsAdmin();
+      await expect(findAssignAction(page)!(formWithShift('open'))).rejects.toThrow(
+        'Shift is already full'
+      );
+      expect(addVolunteerToShift).not.toHaveBeenCalled();
+    });
+
+    it('rejects a shift from another event', async () => {
+      (getShiftById as jest.Mock).mockResolvedValue(makeShift({ id: 'other', teamId: 'team2' }));
+
+      const page = await renderAsAdmin();
+      mockGetTeamsById.mockResolvedValue([{ ...mockTeams[0], id: 'team2', eventId: 'event2' }]);
+      await expect(findAssignAction(page)!(formWithShift('other'))).rejects.toThrow(
+        'Shift not found in the current event'
+      );
+      expect(addVolunteerToShift).not.toHaveBeenCalled();
+    });
   });
 });
