@@ -1,7 +1,7 @@
 import { getPretixAttendeesForEvent } from '@/lib/pretix-ticket';
 import {
-  addVolunteersToEvent,
   createUser,
+  syncEventVolunteers,
   getUsers,
   undeleteUser,
   updateUser
@@ -115,18 +115,29 @@ export const POST = async (): Promise<Response> => {
       }
     }
 
-    // Record ticket holders as event volunteers so they can be filtered by event before signing up
-    const addedToEventCount = await addVolunteersToEvent(event.id, attendeeUserIds);
+    // Record ticket holders as event volunteers so they can be filtered by event before signing
+    // up, and mark anyone no longer holding a valid ticket as cancelled. An empty attendee list
+    // is more likely a Pretix/config problem than every ticket being cancelled, so skip the sync.
+    let cancelledCount = 0;
+    if (attendeeUserIds.length > 0) {
+      const sync = await syncEventVolunteers(event.id, attendeeUserIds);
+      cancelledCount = sync.cancelledCount;
+      console.info('[user-import] synced event volunteers', { importRunId, ...sync });
+    } else {
+      console.warn('[user-import] no attendees returned; event volunteers not synced', {
+        importRunId
+      });
+    }
 
     console.info('[user-import] complete', {
-      addedToEventCount,
       importRunId,
       eventId: event.id,
       eventSlug: event.slug,
       attendeeCount: attendees.length,
       createdCount,
       updatedCount,
-      undeletedCount
+      undeletedCount,
+      cancelledCount
     });
 
     return redirectTo(
@@ -134,7 +145,8 @@ export const POST = async (): Promise<Response> => {
         attendeeCount: attendees.length,
         createdCount,
         updatedCount,
-        undeletedCount
+        undeletedCount,
+        cancelledCount
       })
     );
   } catch (error) {

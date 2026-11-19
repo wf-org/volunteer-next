@@ -162,6 +162,8 @@ declare global {
     eventId?: EventId;
     /* Only volunteers with fewer hours than the event's requiredVolunteerHours */
     belowMinimumHours?: boolean;
+    /* Only volunteers whose imported Pretix ticket for the event has been cancelled */
+    cancelledTicket?: boolean;
   }
 
   interface TeamFilters {

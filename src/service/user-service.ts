@@ -189,25 +189,46 @@ export const getFilteredUsers = cache(
     }
     // Hours filters use the filtered event if one is selected, otherwise the current event
     const hoursEventId = filters.eventId ?? eventId;
-    if (filters.eventId) {
+    if (filters.cancelledTicket && hoursEventId) {
+      // Replaces the event membership check below, which excludes cancelled tickets
+      queryParams.push(hoursEventId);
+      queryParts.push(
+        `EXISTS (
+          SELECT 1 FROM event_volunteer ev
+          WHERE ev.user_id = u.id AND ev.event_id = $${queryParams.length}
+            AND ev.cancelled_at IS NOT NULL
+        )`
+      );
+    } else if (filters.eventId) {
       queryParams.push(filters.eventId);
-      // In the event = imported ticket holder, has a shift in it, or has a role in it
+      // In the event = imported ticket holder, has a shift in it, or has a role in it,
+      // excluding anyone whose imported ticket has since been cancelled
       queryParts.push(
         `(
           EXISTS (
             SELECT 1 FROM event_volunteer ev
             WHERE ev.user_id = u.id AND ev.event_id = $${queryParams.length}
+              AND ev.cancelled_at IS NULL
           )
-          OR EXISTS (
-            SELECT 1
-            FROM shift_volunteer sv
-            JOIN shift s ON sv.shift_id = s.id
-            JOIN team t ON s."teamId" = t.id
-            WHERE sv.user_id = u.id AND t."eventId" = $${queryParams.length}
-          )
-          OR EXISTS (
-            SELECT 1 FROM role r
-            WHERE r."userId" = u.id AND r."eventId" = $${queryParams.length}
+          OR (
+            (
+              EXISTS (
+                SELECT 1
+                FROM shift_volunteer sv
+                JOIN shift s ON sv.shift_id = s.id
+                JOIN team t ON s."teamId" = t.id
+                WHERE sv.user_id = u.id AND t."eventId" = $${queryParams.length}
+              )
+              OR EXISTS (
+                SELECT 1 FROM role r
+                WHERE r."userId" = u.id AND r."eventId" = $${queryParams.length}
+              )
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM event_volunteer ev
+              WHERE ev.user_id = u.id AND ev.event_id = $${queryParams.length}
+                AND ev.cancelled_at IS NOT NULL
+            )
           )
         )`
       );
@@ -638,28 +659,38 @@ export const getVolunteersForShifts = cache(
 );
 
 /**
- * Records that users belong to an event (e.g. Pretix ticket holders), independent of shifts.
+ * Syncs an event's ticket holders (independent of shifts): the given users are recorded as
+ * active, and previously recorded users missing from the list are marked cancelled.
  * @param eventId - The event the users belong to.
- * @param userIds - The users to add. Already-recorded users are ignored.
+ * @param activeUserIds - All users who currently hold a valid ticket for the event.
  * @param client - Optional database client for transaction support.
- * @returns The number of users newly added to the event.
+ * @returns How many users were newly added or reactivated, and how many were marked cancelled.
  */
-export const addVolunteersToEvent = async (
+export const syncEventVolunteers = async (
   eventId: EventId,
-  userIds: UserId[],
+  activeUserIds: UserId[],
   client?: PoolClient
-): Promise<number> => {
-  if (userIds.length === 0) {
-    return 0;
-  }
+): Promise<{ activatedCount: number; cancelledCount: number }> => {
   const db = client || pool;
-  const result = await db.query(
+  const activated = await db.query(
     `
     INSERT INTO event_volunteer ("event_id", "user_id")
     SELECT $1, unnest($2::text[])
-    ON CONFLICT DO NOTHING
+    ON CONFLICT ("event_id", "user_id") DO UPDATE
+      SET "cancelled_at" = NULL
+      WHERE event_volunteer."cancelled_at" IS NOT NULL
     `,
-    [eventId, userIds]
+    [eventId, activeUserIds]
   );
-  return result.rowCount ?? 0;
+  const cancelled = await db.query(
+    `
+    UPDATE event_volunteer
+    SET "cancelled_at" = NOW()
+    WHERE "event_id" = $1
+      AND "cancelled_at" IS NULL
+      AND NOT ("user_id" = ANY($2::text[]))
+    `,
+    [eventId, activeUserIds]
+  );
+  return { activatedCount: activated.rowCount ?? 0, cancelledCount: cancelled.rowCount ?? 0 };
 };

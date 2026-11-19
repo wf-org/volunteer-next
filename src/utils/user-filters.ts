@@ -31,7 +31,8 @@ export function paramsToUserFilters(searchParams: URLSearchParams): UserFilters 
     onTeam: searchParams.get('onTeam') || undefined,
     eventHours: asPositiveInteger(searchParams.get('eventHours')),
     eventId: searchParams.get('eventId') || undefined,
-    belowMinimumHours: searchParams.get('belowMinimumHours') === 'true' || undefined
+    belowMinimumHours: searchParams.get('belowMinimumHours') === 'true' || undefined,
+    cancelledTicket: searchParams.get('cancelledTicket') === 'true' || undefined
   };
 }
 
@@ -52,7 +53,8 @@ export function recordToUserFilters(
     onTeam: normalise(record['onTeam']),
     eventHours: asPositiveInteger(normalise(record['eventHours'])),
     eventId: normalise(record['eventId']),
-    belowMinimumHours: record['belowMinimumHours'] === 'true' || undefined
+    belowMinimumHours: record['belowMinimumHours'] === 'true' || undefined,
+    cancelledTicket: record['cancelledTicket'] === 'true' || undefined
   };
 }
 
@@ -111,6 +113,11 @@ export function userFiltersToParams(
     params.set('belowMinimumHours', 'true');
   } else {
     params.delete('belowMinimumHours');
+  }
+  if (filters.cancelledTicket) {
+    params.set('cancelledTicket', 'true');
+  } else {
+    params.delete('cancelledTicket');
   }
   return params;
 }

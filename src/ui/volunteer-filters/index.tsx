@@ -139,6 +139,19 @@ export default function VolunteerFilters({ withFilters = [], events = [] }: Prop
                       </Box>
                     </FormField>
                   )}
+                  {hasFilter.has('cancelledTicket') && (
+                    <Text as="label" size="2">
+                      <Flex align="center" gap="2">
+                        <Checkbox
+                          checked={currentFilters.cancelledTicket ?? false}
+                          onCheckedChange={(checked) =>
+                            onFilterChange('cancelledTicket', checked ? 'true' : undefined)
+                          }
+                        />
+                        {t('cancelledTicket')}
+                      </Flex>
+                    </Text>
+                  )}
                   {hasFilter.has('belowMinimumHours') && (
                     <Text as="label" size="2">
                       <Flex align="center" gap="2">

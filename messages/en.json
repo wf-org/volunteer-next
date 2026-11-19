@@ -198,7 +198,7 @@
     "importVolunteersPending": "Importing…",
     "importVolunteersProcessingHint": "This can take a minute for large events.",
     "importVolunteersSuccessTitle": "Import complete",
-    "importVolunteersSuccessMessage": "Found {attendeeCount} attendees: {createdCount} added, {updatedCount} updated, {undeletedCount} restored.",
+    "importVolunteersSuccessMessage": "Found {attendeeCount} attendees: {createdCount} added, {updatedCount} updated, {undeletedCount} restored, {cancelledCount} marked as cancelled.",
     "importVolunteersFailureTitle": "Import failed",
     "importVolunteersFailureMessage": "Couldn’t import volunteers from Pretix. Check the server logs and try again."
   },
@@ -311,6 +311,7 @@
     "eventFilterLabel": "Filter by event",
     "allEvents": "All events",
     "belowMinimumHours": "Below the event's minimum hours",
+    "cancelledTicket": "Cancelled Pretix ticket",
     "clear": "Clear"
   },
   "TeamFilters": {

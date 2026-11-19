@@ -38,7 +38,13 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
   const hoursEvent = (filters.eventId && events.find((e) => e.id === filters.eventId)) || event;
   const users = await getFilteredUsers(filters, permissionsProfile, event?.id);
   const volunteers = usersToVolunteers(users, permissionsProfile);
-  const withFilters: (keyof UserFilters)[] = ['searchQuery', 'roleType', 'eventId', 'eventHours'];
+  const withFilters: (keyof UserFilters)[] = [
+    'searchQuery',
+    'roleType',
+    'eventId',
+    'cancelledTicket',
+    'eventHours'
+  ];
   if ((hoursEvent?.requiredVolunteerHours ?? 0) > 0) {
     withFilters.push('belowMinimumHours');
   }
@@ -115,6 +121,7 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
   const createdCount = Number(getValue('createdCount') ?? 0);
   const updatedCount = Number(getValue('updatedCount') ?? 0);
   const undeletedCount = Number(getValue('undeletedCount') ?? 0);
+  const cancelledCount = Number(getValue('cancelledCount') ?? 0);
 
   return (
     <Flex direction="column" gap="4">
@@ -137,7 +144,8 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
                 attendeeCount,
                 createdCount,
                 updatedCount,
-                undeletedCount
+                undeletedCount,
+                cancelledCount
               })}
             </Text>
           </Flex>

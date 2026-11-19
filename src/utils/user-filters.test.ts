@@ -199,3 +199,21 @@ describe('eventId and belowMinimumHours filters', () => {
     expect(params.has('belowMinimumHours')).toBe(false);
   });
 });
+
+describe('cancelledTicket filter', () => {
+  it('round-trips through URL params and page records', () => {
+    const filters = paramsToUserFilters(new URLSearchParams({ cancelledTicket: 'true' }));
+    expect(filters.cancelledTicket).toBe(true);
+    expect(userFiltersToParams(filters).get('cancelledTicket')).toBe('true');
+    expect(recordToUserFilters({ cancelledTicket: 'true' }).cancelledTicket).toBe(true);
+  });
+
+  it('is unset when absent', () => {
+    expect(paramsToUserFilters(new URLSearchParams()).cancelledTicket).toBeUndefined();
+    expect(
+      userFiltersToParams({}, new URLSearchParams({ cancelledTicket: 'true' })).has(
+        'cancelledTicket'
+      )
+    ).toBe(false);
+  });
+});
