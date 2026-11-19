@@ -17,18 +17,20 @@ interface Props {
   withFilters?: (keyof UserFilters)[];
   itemActions?: Record<UserId, React.ReactNode>;
   itemContent?: Record<UserId, React.ReactNode>;
+  events?: Pick<EventInfo, 'id' | 'name'>[];
 }
 
 export default function VolunteerList({
   volunteers,
   withFilters = [],
+  events,
   itemActions = {},
   itemContent = {}
 }: Props) {
   const t = useTranslations('VolunteerList');
   return (
     <Flex direction="column" gap="4">
-      <VolunteerFilters withFilters={withFilters} />
+      <VolunteerFilters withFilters={withFilters} events={events} />
       {volunteers.length === 0 ? <Text>{t('empty')}</Text> : null}
       <Flex asChild p="0" m="0" direction="column" gap="2">
         <ul className={styles.list}>

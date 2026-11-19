@@ -158,6 +158,10 @@ declare global {
     withoutQualification?: QualificationId;
     onTeam?: TeamId;
     eventHours?: number;
+    /* Only volunteers with at least one shift in this event. Also the event used for hours filters. */
+    eventId?: EventId;
+    /* Only volunteers with fewer hours than the event's requiredVolunteerHours */
+    belowMinimumHours?: boolean;
   }
 
   interface TeamFilters {

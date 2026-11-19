@@ -187,8 +187,37 @@ export const getFilteredUsers = cache(
         `EXISTS (SELECT 1 FROM shift_volunteer sv JOIN shift s ON sv.shift_id = s.id WHERE sv.user_id = u.id AND s."teamId" = $${queryParams.length})`
       );
     }
+    // Hours filters use the filtered event if one is selected, otherwise the current event
+    const hoursEventId = filters.eventId ?? eventId;
+    if (filters.eventId) {
+      queryParams.push(filters.eventId);
+      queryParts.push(
+        `EXISTS (
+          SELECT 1
+          FROM shift_volunteer sv
+          JOIN shift s ON sv.shift_id = s.id
+          JOIN team t ON s."teamId" = t.id
+          WHERE sv.user_id = u.id AND t."eventId" = $${queryParams.length}
+        )`
+      );
+    }
+    if (filters.belowMinimumHours && hoursEventId) {
+      queryParams.push(hoursEventId);
+      queryParts.push(
+        `
+        (
+        SELECT COALESCE(SUM(COALESCE(s."volunteerHours", s."durationHours")), 0)
+        FROM shift_volunteer sv
+        JOIN shift s ON s.id = sv.shift_id
+        JOIN team t ON s."teamId" = t.id
+        AND t."eventId" = $${queryParams.length}
+        WHERE sv.user_id = u.id
+        ) < (SELECT e."requiredVolunteerHours" FROM event e WHERE e.id = $${queryParams.length})
+        `
+      );
+    }
     if (filters.eventHours !== undefined) {
-      queryParams.push(eventId, filters.eventHours);
+      queryParams.push(hoursEventId, filters.eventHours);
       queryParts.push(
         `
         (

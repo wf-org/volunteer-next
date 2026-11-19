@@ -17,9 +17,11 @@ import { useDebouncedCallback } from 'use-debounce';
 
 interface Props {
   withFilters?: (keyof UserFilters)[];
+  /* Options for the eventId filter */
+  events?: Pick<EventInfo, 'id' | 'name'>[];
 }
 
-export default function VolunteerFilters({ withFilters = [] }: Props) {
+export default function VolunteerFilters({ withFilters = [], events = [] }: Props) {
   const t = useTranslations('VolunteerFilters');
   const hasFilter = new Set(withFilters);
   const showFilterPanel = withFilters.some((filter) => filter !== 'searchQuery');
@@ -114,6 +116,41 @@ export default function VolunteerFilters({ withFilters = [] }: Props) {
                         </Select.Root>
                       </Box>
                     </FormField>
+                  )}
+                  {hasFilter.has('eventId') && events.length > 0 && (
+                    <FormField name={t('eventFilterLabel')} ariaId="eventFilter">
+                      <Box>
+                        <Select.Root
+                          value={currentFilters.eventId ?? 'all'}
+                          onValueChange={(value) =>
+                            onFilterChange('eventId', value === 'all' ? undefined : value)
+                          }
+                        >
+                          <Select.Trigger aria-label={t('eventFilterLabel')} />
+                          <Select.Content>
+                            <Select.Item value="all">{t('allEvents')}</Select.Item>
+                            {events.map((event) => (
+                              <Select.Item key={event.id} value={event.id}>
+                                {event.name}
+                              </Select.Item>
+                            ))}
+                          </Select.Content>
+                        </Select.Root>
+                      </Box>
+                    </FormField>
+                  )}
+                  {hasFilter.has('belowMinimumHours') && (
+                    <Text as="label" size="2">
+                      <Flex align="center" gap="2">
+                        <Checkbox
+                          checked={currentFilters.belowMinimumHours ?? false}
+                          onCheckedChange={(checked) =>
+                            onFilterChange('belowMinimumHours', checked ? 'true' : undefined)
+                          }
+                        />
+                        {t('belowMinimumHours')}
+                      </Flex>
+                    </Text>
                   )}
                   {hasFilter.has('eventHours') && (
                     <FormField name={t('eventHoursFilterLabel')} ariaId="eventHoursFilter">

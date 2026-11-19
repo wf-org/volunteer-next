@@ -167,3 +167,35 @@ describe('recordToUserFilters', () => {
     });
   });
 });
+
+describe('eventId and belowMinimumHours filters', () => {
+  it('round-trips through URL params', () => {
+    const filters = paramsToUserFilters(
+      new URLSearchParams({ eventId: 'event-1', belowMinimumHours: 'true' })
+    );
+    expect(filters.eventId).toBe('event-1');
+    expect(filters.belowMinimumHours).toBe(true);
+
+    const params = userFiltersToParams(filters);
+    expect(params.get('eventId')).toBe('event-1');
+    expect(params.get('belowMinimumHours')).toBe('true');
+  });
+
+  it('reads them from a page searchParams record', () => {
+    const filters = recordToUserFilters({ eventId: 'event-1', belowMinimumHours: 'true' });
+    expect(filters.eventId).toBe('event-1');
+    expect(filters.belowMinimumHours).toBe(true);
+  });
+
+  it('leaves them unset when absent or not "true"', () => {
+    const filters = paramsToUserFilters(new URLSearchParams({ belowMinimumHours: 'false' }));
+    expect(filters.eventId).toBeUndefined();
+    expect(filters.belowMinimumHours).toBeUndefined();
+    const params = userFiltersToParams(
+      {},
+      new URLSearchParams({ eventId: 'x', belowMinimumHours: 'true' })
+    );
+    expect(params.has('eventId')).toBe(false);
+    expect(params.has('belowMinimumHours')).toBe(false);
+  });
+});

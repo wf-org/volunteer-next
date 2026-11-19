@@ -20,6 +20,7 @@ import { getPermissionsProfile } from '@/utils/permissions';
 import NextLink from 'next/link';
 import { getHoursForVolunteers } from '@/service/shift-service';
 import ImportVolunteersButton from '@/ui/import-volunteers-button';
+import { getEvents } from '@/service/event-service';
 
 const PAGE_KEY = 'UsersDashboardPage';
 export const generateMetadata = metadata(PAGE_KEY);
@@ -32,9 +33,15 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
   const t = await getTranslations(PAGE_KEY);
   const filters = recordToUserFilters(resolvedSearchParams);
   const event = await getCurrentEvent();
+  const events = await getEvents();
+  // Hours are shown and filtered for the selected event, falling back to the current event
+  const hoursEvent = (filters.eventId && events.find((e) => e.id === filters.eventId)) || event;
   const users = await getFilteredUsers(filters, permissionsProfile, event?.id);
   const volunteers = usersToVolunteers(users, permissionsProfile);
-  const withFilters: (keyof UserFilters)[] = ['searchQuery', 'roleType', 'eventHours'];
+  const withFilters: (keyof UserFilters)[] = ['searchQuery', 'roleType', 'eventId', 'eventHours'];
+  if ((hoursEvent?.requiredVolunteerHours ?? 0) > 0) {
+    withFilters.push('belowMinimumHours');
+  }
   if (canEdit) {
     withFilters.push('showDeleted');
   }
@@ -84,9 +91,9 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
   }
 
   const itemContent: Record<UserId, React.ReactNode> = {};
-  if (filters.eventHours !== undefined && event) {
+  if ((filters.eventHours !== undefined || filters.belowMinimumHours) && hoursEvent) {
     const hours = await getHoursForVolunteers(
-      event.id,
+      hoursEvent.id,
       volunteers.map((v) => v.id)
     );
     for (const volunteer of volunteers) {
@@ -159,9 +166,7 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
             </NextLink>
           </Button>
         )}
-        {canEdit && (
-          <ImportVolunteersButton />
-        )}
+        {canEdit && <ImportVolunteersButton />}
         <Button variant="soft" asChild>
           <NextLink
             href={getUserApiPath(filters, { format: 'csv' })}
@@ -178,6 +183,7 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
       <VolunteerList
         volunteers={volunteers}
         withFilters={withFilters}
+        events={events.map(({ id, name }) => ({ id, name }))}
         itemActions={itemActions}
         itemContent={itemContent}
       />
