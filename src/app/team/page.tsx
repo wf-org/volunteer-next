@@ -15,7 +15,7 @@ import { getCreateTeamPath, getTeamShiftsPath, getUpdateTeamPath } from '@/utils
 import { getShiftsForEvent } from '@/service/shift-service';
 import { recordToTeamFilters } from '@/utils/team-filters';
 import { getVolunteersForShifts } from '@/service/user-service';
-import { getPermissionsProfile } from '@/utils/permissions';
+import { filterVisibleShifts, getPermissionsProfile } from '@/utils/permissions';
 import NextLink from 'next/link';
 import { hasEventEnded, hasEventStarted } from '@/utils/date';
 import { getQualificationsForEvent } from '@/service/qualification-service';
@@ -39,7 +39,7 @@ export default async function TeamsDashboard({ searchParams }: PageProps<'/team'
 
   const filters = recordToTeamFilters(await searchParams);
   const teams = await getFilteredTeamsForEvent(event.id, filters);
-  const shifts = await getShiftsForEvent(event.id);
+  const shifts = filterVisibleShifts(user, event, await getShiftsForEvent(event.id));
   const shiftVolunteers = await getVolunteersForShifts(
     shifts.map((shift) => shift.id),
     getPermissionsProfile(user),

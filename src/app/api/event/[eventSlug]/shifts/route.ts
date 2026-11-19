@@ -11,7 +11,7 @@ import { getTeamsForEvent } from '@/service/team-service';
 import { getVolunteersForShifts } from '@/service/user-service';
 import { checkAuthorisation, currentUser } from '@/session';
 import { shiftsToCSV } from '@/utils/csv-export';
-import { getPermissionsProfile } from '@/utils/permissions';
+import { filterVisibleShifts, getPermissionsProfile } from '@/utils/permissions';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const GET = async (
@@ -26,11 +26,12 @@ export const GET = async (
     if (!event) {
       return NotFoundResponse();
     }
-    const shifts = await getShiftsForEvent(event.id);
+    const user = await currentUser();
+    const shifts = filterVisibleShifts(user, event, await getShiftsForEvent(event.id));
     const teams = await getTeamsForEvent(event.id);
     const shiftVolunteers = await getVolunteersForShifts(
       shifts.map((shift) => shift.id),
-      getPermissionsProfile(await currentUser()),
+      getPermissionsProfile(user),
       event.id
     );
     const csvContent = shiftsToCSV({

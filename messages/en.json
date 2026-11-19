@@ -165,7 +165,7 @@
     "emailFailureTitle": "Oops",
     "emailFailureMessage": "Something went wrong. Please try again later.",
     "importPretalx": "Import from pretalx",
-    "importPretalxDescription": "Creates a shift for each confirmed session in the latest published pretalx schedule and assigns its speakers by email. Re-running updates existing shifts.",
+    "importPretalxDescription": "Creates an inactive shift (hidden from volunteers) for each confirmed session in the latest published pretalx schedule and assigns its speakers by email. Re-running updates existing shifts but keeps their Active setting.",
     "importPretalxTeam": "Team for new shifts",
     "importPretalxSubmit": "Import",
     "importPretalxPending": "Importing…",
@@ -410,7 +410,8 @@
     "collapse": "Collapse shift details",
     "signup": "Sign up",
     "cancel": "Cancel Shift",
-    "full": "Shift is full!"
+    "full": "Shift is full!",
+    "inactive": "Inactive: hidden from volunteers"
   },
   "ShiftDialog": {
     "cancel": "Cancel",
@@ -435,7 +436,7 @@
     "minVolunteersDescription": "The minimum number of volunteers needed.",
     "maxVolunteers": "Maximum Volunteers Needed",
     "maxVolunteersDescription": "The maximum number of volunteers needed.",
-    "active": "Active",
+    "active": "Active (inactive shifts are only visible to admins, organisers and this team's leads)",
     "requirements": "Shift Requirements",
     "requirementsDescription": "Qualifications that volunteers must have to sign up for this shift. Optional.",
     "none": "None",

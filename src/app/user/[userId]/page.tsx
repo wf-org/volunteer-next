@@ -116,7 +116,6 @@ export default async function VolunteerProfilePage({ params }: PageProps<'/user/
     ? eventShifts
         .filter(
           (shift) =>
-            shift.isActive &&
             !assignedShiftIds.has(shift.id) &&
             canSignupForShift(event, shift) &&
             (shiftVolunteers[shift.id]?.length ?? 0) < shift.maxVolunteers

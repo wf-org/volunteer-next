@@ -108,6 +108,7 @@ export default function ShiftCard({
                   </Badge>
                 ))}
                 <Flex direction="row" gap="2" align="center" wrap="wrap">
+                  {!shift.isActive && <Badge color="orange">{t('inactive')}</Badge>}
                   <Badge color="gray">
                     {t('max')}: {shift.maxVolunteers}
                   </Badge>

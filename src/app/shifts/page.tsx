@@ -12,12 +12,8 @@ import {
 import SendEmailButton from '@/ui/send-email-button';
 import ShiftOverviewList from '@/ui/shift-overview-list';
 import { deduplicateBy } from '@/utils/list';
-import {
-  getEventShiftsApiPath,
-  getEventShiftsPath,
-  getImportPretalxApiPath
-} from '@/utils/path';
-import { getPermissionsProfile } from '@/utils/permissions';
+import { getEventShiftsApiPath, getEventShiftsPath, getImportPretalxApiPath } from '@/utils/path';
+import { filterVisibleShifts, getPermissionsProfile } from '@/utils/permissions';
 import { Share2Icon, EnvelopeClosedIcon } from '@radix-ui/react-icons';
 import { Button, Card, Flex, Heading, Text } from '@radix-ui/themes';
 import { getTranslations } from 'next-intl/server';
@@ -71,11 +67,16 @@ export default async function EventShifts({ searchParams }: PageProps<`/shifts`>
       pretalxCounts.skippedCount +
       pretalxCounts.notInScheduleCount >
     0;
-  const shifts = await getFilteredShiftsForEvent(event.id, filters);
+  const user = await currentUser();
+  const shifts = filterVisibleShifts(
+    user,
+    event,
+    await getFilteredShiftsForEvent(event.id, filters)
+  );
   const shiftMap = Object.fromEntries(shifts.map((shift) => [shift.id, shift]));
   const shiftVolunteers = await getVolunteersForShifts(
     Object.keys(shiftMap),
-    getPermissionsProfile(await currentUser()),
+    getPermissionsProfile(user),
     event.id
   );
   const shiftsByVolunteerId = Object.entries(shiftVolunteers).reduce<Record<UserId, ShiftInfo[]>>(

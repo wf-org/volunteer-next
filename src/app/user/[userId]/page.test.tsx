@@ -578,8 +578,9 @@ describe('UserProfilePage', () => {
       await renderAsAdmin();
       fireEvent.click(screen.getByLabelText('assignShiftLabel'));
       const options = screen.getAllByRole('option').map((option) => option.textContent);
-      expect(options).toHaveLength(1);
+      expect(options).toHaveLength(2);
       expect(options[0]).toContain('Open shift');
+      expect(options[1]).toContain('Inactive shift');
     });
 
     it('does not show shift assignment to non-admins', async () => {

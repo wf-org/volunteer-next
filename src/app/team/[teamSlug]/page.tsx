@@ -30,6 +30,8 @@ import { getTeamShiftsApiPath, getTeamShiftsPath } from '@/utils/path';
 import {
   canCancelShiftSignup,
   canSignupForShift,
+  canViewShift,
+  filterVisibleShifts,
   getPermissionsProfile
 } from '@/utils/permissions';
 import { recordToShiftFilters } from '@/utils/shift-filters';
@@ -63,7 +65,12 @@ export default async function TeamPage({ params, searchParams }: PageProps<`/tea
   const qualifications = await getQualificationsForEvent(team.eventId).then((quals) =>
     quals.filter((q) => !q.teamId || q.teamId === team.id)
   );
-  const shifts = await getFilteredShiftsForEvent(team.eventId, filters);
+  const user = (await currentUser())!; // checkAuthorisation below redirects if there is no user
+  const shifts = filterVisibleShifts(
+    user,
+    event,
+    await getFilteredShiftsForEvent(team.eventId, filters)
+  );
   shifts.sort((a, b) => {
     const dayDiff = a.eventDay - b.eventDay;
     if (dayDiff !== 0) {
@@ -81,7 +88,6 @@ export default async function TeamPage({ params, searchParams }: PageProps<`/tea
   const hasAccess = await checkAuthorisation(editorRoles, true);
   const isEditable = !hasEventStarted(event) && hasAccess;
   const t = await getTranslations(PAGE_KEY);
-  const user = (await currentUser())!; // checkAuthorisation guarantees this is not null
   const ticketChecksEnabled = isPretixTicketCheckEnabled();
   const userHasValidTicket =
     !ticketChecksEnabled || (await hasValidPretixTicketForEvent(user.email, event.slug));
@@ -125,6 +131,9 @@ export default async function TeamPage({ params, searchParams }: PageProps<`/tea
     }
     if (shift.teamId !== team.id) {
       throw new Error('Shift does not belong to this team');
+    }
+    if (!canViewShift(user, event, shift)) {
+      notFound();
     }
 
     if (shift.requirements.length > 0) {

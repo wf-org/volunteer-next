@@ -110,3 +110,32 @@ export const canSignupForShift = (event: EventInfo, shift: ShiftInfo): boolean =
 export const canCancelShiftSignup = (event: EventInfo, shift: ShiftInfo): boolean => {
   return !hasShiftStarted(event, shift);
 };
+
+/**
+ * Check whether a user can see a shift. Inactive shifts are only visible to admins,
+ * organisers of the shift's event, and team leads of the shift's team.
+ * @param user - The current user (or null if not logged in)
+ * @param event - The event the shift belongs to
+ * @param shift - The shift to check
+ * @returns Whether the user can see the shift
+ */
+export const canViewShift = (user: User | null, event: EventInfo, shift: ShiftInfo): boolean => {
+  if (shift.isActive) {
+    return true;
+  }
+  return (user?.roles ?? []).some(
+    (role) =>
+      role.type === 'admin' ||
+      (role.type === 'organiser' && role.eventId === event.id) ||
+      (role.type === 'team-lead' && role.eventId === event.id && role.teamId === shift.teamId)
+  );
+};
+
+/**
+ * Filters a list of shifts down to those the user can see. See canViewShift.
+ */
+export const filterVisibleShifts = (
+  user: User | null,
+  event: EventInfo,
+  shifts: ShiftInfo[]
+): ShiftInfo[] => shifts.filter((shift) => canViewShift(user, event, shift));

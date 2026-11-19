@@ -2,7 +2,9 @@ import {
   getPermissionsProfile,
   canAccess,
   canSignupForShift,
-  canCancelShiftSignup
+  canCancelShiftSignup,
+  canViewShift,
+  filterVisibleShifts
 } from './permissions';
 import { hasShiftStarted, hasShiftEnded } from './date';
 
@@ -114,5 +116,41 @@ describe('canCancelShiftSignup', () => {
     mockHasShiftStarted.mockReturnValue(true);
     const result = canCancelShiftSignup(event as any, shift as any);
     expect(result).toBe(false);
+  });
+});
+
+describe('canViewShift', () => {
+  const event = { id: 'e1' } as EventInfo;
+  const shift = (isActive: boolean) => ({ id: 's1', teamId: 't1', isActive }) as ShiftInfo;
+  const user = (roles: UserRole[]) => ({ id: 'u1', roles }) as User;
+
+  it('shows active shifts to everyone', () => {
+    expect(canViewShift(null, event, shift(true))).toBe(true);
+    expect(canViewShift(user([]), event, shift(true))).toBe(true);
+  });
+
+  it('hides inactive shifts from volunteers and unrelated leads', () => {
+    expect(canViewShift(null, event, shift(false))).toBe(false);
+    expect(canViewShift(user([]), event, shift(false))).toBe(false);
+    expect(
+      canViewShift(user([{ type: 'team-lead', eventId: 'e1', teamId: 't2' }]), event, shift(false))
+    ).toBe(false);
+    expect(canViewShift(user([{ type: 'organiser', eventId: 'e2' }]), event, shift(false))).toBe(
+      false
+    );
+  });
+
+  it('shows inactive shifts to admins, event organisers and the team lead', () => {
+    expect(canViewShift(user([{ type: 'admin' }]), event, shift(false))).toBe(true);
+    expect(canViewShift(user([{ type: 'organiser', eventId: 'e1' }]), event, shift(false))).toBe(
+      true
+    );
+    expect(
+      canViewShift(user([{ type: 'team-lead', eventId: 'e1', teamId: 't1' }]), event, shift(false))
+    ).toBe(true);
+  });
+
+  it('filters lists', () => {
+    expect(filterVisibleShifts(user([]), event, [shift(true), shift(false)])).toHaveLength(1);
   });
 });

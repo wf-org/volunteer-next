@@ -134,7 +134,7 @@ export const POST = async (
               volunteerHours: PRETALX_SESSION_VOLUNTEER_HOURS,
               minVolunteers: speakerCount,
               maxVolunteers: speakerCount,
-              isActive: true,
+              isActive: false, // only admins, organisers and the team's leads see it
               requirements: []
             },
             client
