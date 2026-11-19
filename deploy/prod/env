@@ -78,3 +78,7 @@ REQUIRE_TEAM_LEAD=false
 # DEBUG_FORCE_ROLE=admin
 # DEBUG_FORCE_ROLE_EVENTID=<Event ID to use when forcing a role that requires an event ID>
 # DEBUG_FORCE_ROLE_TEAMID=<Team ID to use when forcing a role that requires a team ID>
+
+## Pretalx Integration
+PRETALX_API_BASE_URL=https://teach.wildfireretreat.org
+# PRETALX_EVENT_SLUG=<pretalx event slug; defaults to the volunteer event slug>

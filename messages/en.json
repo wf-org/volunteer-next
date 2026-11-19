@@ -163,7 +163,19 @@
     "emailSuccessTitle": "Emails sent",
     "emailSuccessMessage": "Your notifications have been sent!",
     "emailFailureTitle": "Oops",
-    "emailFailureMessage": "Something went wrong. Please try again later."
+    "emailFailureMessage": "Something went wrong. Please try again later.",
+    "importPretalx": "Import from pretalx",
+    "importPretalxDescription": "Creates a shift for each confirmed session in the latest published pretalx schedule and assigns its speakers by email. Re-running updates existing shifts.",
+    "importPretalxTeam": "Team for new shifts",
+    "importPretalxSubmit": "Import",
+    "importPretalxPending": "Importing…",
+    "importPretalxProcessingHint": "This can take a minute for large schedules.",
+    "cancel": "Cancel",
+    "importPretalxSuccessTitle": "pretalx import complete",
+    "importPretalxSuccessMessage": "Found {sessionCount} confirmed sessions: {createdCount} shifts created, {updatedCount} updated, {assignedCount} speakers assigned.",
+    "importPretalxWarnings": "{unmatchedSpeakerCount} speakers had no matching volunteer account. {skippedCount} sessions were outside the event dates. {notInScheduleCount} previously imported shifts are no longer in the schedule.",
+    "importPretalxFailureTitle": "pretalx import failed",
+    "importPretalxFailureMessage": "Couldn’t import sessions from pretalx. Check the server logs and try again."
   },
   "MyShiftsPage": {
     "title": "My Shifts",
