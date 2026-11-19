@@ -1,5 +1,6 @@
 import { getPretixAttendeesForEvent } from '@/lib/pretix-ticket';
 import {
+  addVolunteersToEvent,
   createUser,
   getUsers,
   undeleteUser,
@@ -73,6 +74,7 @@ export const POST = async (): Promise<Response> => {
     let createdCount = 0;
     let updatedCount = 0;
     let undeletedCount = 0;
+    const attendeeUserIds: UserId[] = [];
 
     console.info('[user-import] fetched data', {
       importRunId,
@@ -90,9 +92,11 @@ export const POST = async (): Promise<Response> => {
           email: attendee.email
         });
         usersByEmail.set(normaliseEmail(created.email), created);
+        attendeeUserIds.push(created.id);
         createdCount += 1;
         continue;
       }
+      attendeeUserIds.push(existing.id);
 
       if (existing.deletedAt) {
         await undeleteUser(existing.id);
@@ -111,7 +115,11 @@ export const POST = async (): Promise<Response> => {
       }
     }
 
+    // Record ticket holders as event volunteers so they can be filtered by event before signing up
+    const addedToEventCount = await addVolunteersToEvent(event.id, attendeeUserIds);
+
     console.info('[user-import] complete', {
+      addedToEventCount,
       importRunId,
       eventId: event.id,
       eventSlug: event.slug,

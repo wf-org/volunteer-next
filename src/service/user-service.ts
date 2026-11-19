@@ -191,13 +191,24 @@ export const getFilteredUsers = cache(
     const hoursEventId = filters.eventId ?? eventId;
     if (filters.eventId) {
       queryParams.push(filters.eventId);
+      // In the event = imported ticket holder, has a shift in it, or has a role in it
       queryParts.push(
-        `EXISTS (
-          SELECT 1
-          FROM shift_volunteer sv
-          JOIN shift s ON sv.shift_id = s.id
-          JOIN team t ON s."teamId" = t.id
-          WHERE sv.user_id = u.id AND t."eventId" = $${queryParams.length}
+        `(
+          EXISTS (
+            SELECT 1 FROM event_volunteer ev
+            WHERE ev.user_id = u.id AND ev.event_id = $${queryParams.length}
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM shift_volunteer sv
+            JOIN shift s ON sv.shift_id = s.id
+            JOIN team t ON s."teamId" = t.id
+            WHERE sv.user_id = u.id AND t."eventId" = $${queryParams.length}
+          )
+          OR EXISTS (
+            SELECT 1 FROM role r
+            WHERE r."userId" = u.id AND r."eventId" = $${queryParams.length}
+          )
         )`
       );
     }
@@ -625,3 +636,30 @@ export const getVolunteersForShifts = cache(
     return volunteersByShift;
   }
 );
+
+/**
+ * Records that users belong to an event (e.g. Pretix ticket holders), independent of shifts.
+ * @param eventId - The event the users belong to.
+ * @param userIds - The users to add. Already-recorded users are ignored.
+ * @param client - Optional database client for transaction support.
+ * @returns The number of users newly added to the event.
+ */
+export const addVolunteersToEvent = async (
+  eventId: EventId,
+  userIds: UserId[],
+  client?: PoolClient
+): Promise<number> => {
+  if (userIds.length === 0) {
+    return 0;
+  }
+  const db = client || pool;
+  const result = await db.query(
+    `
+    INSERT INTO event_volunteer ("event_id", "user_id")
+    SELECT $1, unnest($2::text[])
+    ON CONFLICT DO NOTHING
+    `,
+    [eventId, userIds]
+  );
+  return result.rowCount ?? 0;
+};

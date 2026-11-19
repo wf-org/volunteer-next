@@ -308,7 +308,7 @@
     "teamLead": "Team Lead",
     "eventHoursFilterLabel": "Filter by event hours",
     "eventHoursPlaceholder": "Min. hours volunteered",
-    "eventFilterLabel": "Filter by event (has a shift in it)",
+    "eventFilterLabel": "Filter by event",
     "allEvents": "All events",
     "belowMinimumHours": "Below the event's minimum hours",
     "clear": "Clear"
