@@ -64,6 +64,8 @@ export const getEventShiftsApiPath = (
   eventSlug: string,
   params?: { format: 'csv' | 'json' }
 ): string => `/api/event/${eventSlug}/shifts?format=${params?.format ?? 'json'}`;
+export const getImportPretalxApiPath = (eventSlug: string): string =>
+  `/api/event/${eventSlug}/shifts/import-pretalx`;
 export const getTeamShiftsApiPath = (
   eventSlug: string,
   teamSlug: string,

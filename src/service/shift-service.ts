@@ -528,14 +528,15 @@ export const getShiftSignupCount = async (
  * @param shiftId - The ID of the shift to add the volunteer to.
  * @param volunteerId - The ID of the volunteer to add to the shift.
  * @param client - Optional database client for transaction support.
+ * @returns True if the volunteer was added, false if they were already on the shift.
  */
 export const addVolunteerToShift = async (
   shiftId: ShiftId,
   volunteerId: UserId,
   client?: PoolClient
-): Promise<void> => {
+): Promise<boolean> => {
   const db = client || pool;
-  await db.query(
+  const result = await db.query(
     `
     INSERT INTO shift_volunteer (
       "shift_id",
@@ -545,6 +546,7 @@ export const addVolunteerToShift = async (
     `,
     [shiftId, volunteerId]
   );
+  return (result.rowCount ?? 0) > 0;
 };
 
 /**
@@ -703,3 +705,57 @@ export const getHoursForVolunteers = cache(
     return hours;
   }
 );
+
+/**
+ * Fetches shifts in an event that were imported from pretalx, keyed by their pretalx ref.
+ * @param eventId - The ID of the event.
+ * @return A map of pretalx ref ("<submission code>#<slot index>") to ShiftInfo.
+ */
+export const getPretalxShiftsForEvent = async (
+  eventId: EventId
+): Promise<Map<string, ShiftInfo>> => {
+  const result = await pool.query(
+    `
+    SELECT 
+      s."id",
+      s."teamId", 
+      s."title", 
+      s."description",
+      s."eventDay", 
+      s."startTime", 
+      s."durationHours",
+      s."volunteerHours",
+      s."minVolunteers",
+      s."maxVolunteers",
+      s."isActive",
+      s."pretalxRef",
+      r."qualificationId"
+    FROM shift s
+    LEFT JOIN requirement r ON s.id = r."shiftId"
+    JOIN team t ON s."teamId" = t.id
+    WHERE t."eventId" = $1
+      AND s."pretalxRef" IS NOT NULL
+    `,
+    [eventId]
+  );
+  const shifts = rowsToShifts(result.rows);
+  const refById = new Map<ShiftId, string>(
+    result.rows.map((row) => [row.id as ShiftId, row.pretalxRef as string])
+  );
+  return new Map(shifts.map((shift) => [refById.get(shift.id)!, shift]));
+};
+
+/**
+ * Links a shift to a pretalx talk slot.
+ * @param shiftId - The ID of the shift.
+ * @param pretalxRef - "<submission code>#<slot index>"
+ * @param client - Optional database client for transaction support.
+ */
+export const setShiftPretalxRef = async (
+  shiftId: ShiftId,
+  pretalxRef: string,
+  client?: PoolClient
+): Promise<void> => {
+  const db = client || pool;
+  await db.query(`UPDATE shift SET "pretalxRef" = $2 WHERE id = $1`, [shiftId, pretalxRef]);
+};
