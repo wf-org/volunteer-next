@@ -8,9 +8,6 @@ type PretixConfig = {
   apiToken: string;
 };
 
-
-// TODO: check it's using attendee_email. Need a multiple person order to confirm this
-
 type PretixOrder = {
   code?: string;
   secret?: string;
@@ -82,8 +79,10 @@ const getPretixConfig = (): PretixConfig | null => {
   const explicitApiBaseUrl = cleanEnvValue(process.env.PRETIX_API_BASE_URL);
   const explicitOrganizer = cleanEnvValue(process.env.PRETIX_ORGANIZER);
   const explicitApiToken = cleanEnvValue(process.env.PRETIX_API_TOKEN);
-  const apiBaseUrl = explicitApiBaseUrl ?? parseApiBaseFromDiscoveryUrl(process.env.OAUTH_DISCOVERY_URL);
-  const organizer = explicitOrganizer ?? parseOrganizerFromDiscoveryUrl(process.env.OAUTH_DISCOVERY_URL);
+  const apiBaseUrl =
+    explicitApiBaseUrl ?? parseApiBaseFromDiscoveryUrl(process.env.OAUTH_DISCOVERY_URL);
+  const organizer =
+    explicitOrganizer ?? parseOrganizerFromDiscoveryUrl(process.env.OAUTH_DISCOVERY_URL);
   const apiToken = explicitApiToken;
 
   if (!apiBaseUrl || !organizer || !apiToken) {
@@ -97,22 +96,63 @@ const getPretixConfig = (): PretixConfig | null => {
   };
 };
 
-const buildOrdersUrl = (config: PretixConfig, eventSlug: UrlSlug, email: string): URL => {
-  const endpoint = `${config.apiBaseUrl}/api/v1/organizers/${encodeURIComponent(config.organizer)}/events/${encodeURIComponent(eventSlug)}/orders/`;
-  const url = new URL(endpoint);
-  url.searchParams.set('email__iexact', email);
-  url.searchParams.set('status', 'p');
-  return url;
-};
-
-const buildEventOrdersUrl = (config: PretixConfig, eventSlug: UrlSlug, next?: string): URL => {
-  if (next) {
-    return new URL(next);
+/**
+ * Paid orders for an event. `search` matches attendee emails as well as the purchaser's
+ * (substring, case-insensitive), so callers must still compare emails exactly.
+ * https://docs.pretix.eu/dev/api/resources/orders.html
+ */
+const buildEventOrdersUrl = (
+  config: PretixConfig,
+  eventSlug: UrlSlug,
+  options: { next?: string; search?: string } = {}
+): URL => {
+  if (options.next) {
+    return new URL(options.next);
   }
   const endpoint = `${config.apiBaseUrl}/api/v1/organizers/${encodeURIComponent(config.organizer)}/events/${encodeURIComponent(eventSlug)}/orders/`;
   const url = new URL(endpoint);
   url.searchParams.set('status', 'p');
+  if (options.search) {
+    url.searchParams.set('search', options.search);
+  }
   return url;
+};
+
+const MAX_PAGES = 200;
+
+/**
+ * Fetches every page of paid orders for an event. Throws on a non-success response.
+ */
+const fetchPaidOrders = async (
+  config: PretixConfig,
+  eventSlug: UrlSlug,
+  search?: string
+): Promise<PretixOrder[]> => {
+  const orders: PretixOrder[] = [];
+  let nextUrl: string | undefined;
+  let pageCount = 0;
+  do {
+    const url = buildEventOrdersUrl(config, eventSlug, { next: nextUrl, search });
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Token ${config.apiToken}`,
+        Accept: 'application/json'
+      },
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      throw new Error(`Pretix API returned ${response.status}`);
+    }
+    const data = (await response.json()) as { results?: PretixOrder[]; next?: string | null };
+    orders.push(...(data.results ?? []));
+    nextUrl = data.next ?? undefined;
+    pageCount += 1;
+    if (pageCount > MAX_PAGES) {
+      throw new Error('Pretix pagination exceeded safety limit');
+    }
+  } while (nextUrl);
+  return orders;
 };
 
 const getRequiredPretixItemIds = (): Set<number> => {
@@ -128,59 +168,6 @@ const getRequiredPretixItemIds = (): Set<number> => {
   );
 };
 
-const evaluateOrderTicketState = (
-  order: PretixOrder,
-  checkedEmail: string,
-  requiredItemIds: Set<number>
-): boolean => {
-  if (order.testmode === true) {
-    return false;
-  }
-  if (order.status && order.status !== 'p') {
-    return false;
-  }
-  if (!Array.isArray(order.positions)) {
-    return true;
-  }
-
-  const activePositions = order.positions.filter((position) => position.canceled !== true);
-  if (activePositions.length === 0) {
-    return false;
-  }
-
-  const requiredItemsConfigured = requiredItemIds.size > 0;
-  const positionsAfterItemFilter = requiredItemsConfigured
-    ? activePositions.filter((position) =>
-        typeof position.item === 'number' ? requiredItemIds.has(position.item) : false
-      )
-    : activePositions;
-
-  if (requiredItemsConfigured && positionsAfterItemFilter.length === 0) {
-    return false;
-  }
-
-  const targetEmail = normaliseEmail(checkedEmail);
-  if (!targetEmail) {
-    return false;
-  }
-  const positionsWithAttendeeEmail = positionsAfterItemFilter.filter(
-    (position) => normaliseEmail(position.attendee_email) !== null
-  );
-  if (positionsWithAttendeeEmail.length === 0) {
-    return false;
-  }
-
-  const matchingAttendeeCount = positionsWithAttendeeEmail.filter(
-    (position) => normaliseEmail(position.attendee_email) === targetEmail
-  ).length;
-
-  if (matchingAttendeeCount > 0) {
-    return true;
-  }
-
-  return false;
-};
-
 const normaliseName = (name: string | undefined | null): string | undefined => {
   if (!name) {
     return undefined;
@@ -189,6 +176,10 @@ const normaliseName = (name: string | undefined | null): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+/**
+ * Ticket holders in an order: each active (and, if configured, required-item) position
+ * belongs to its attendee email, or to the purchaser's email when none was entered.
+ */
 const toOrderAttendees = (order: PretixOrder, requiredItemIds: Set<number>): PretixAttendee[] => {
   if (order.testmode === true) {
     return [];
@@ -252,43 +243,18 @@ export const hasValidPretixTicketForEvent = async (
     return false;
   }
 
-  const url = buildOrdersUrl(config, eventSlug, email);
+  const targetEmail = normaliseEmail(email);
+  if (!targetEmail) {
+    return false;
+  }
 
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: `Token ${config.apiToken}`,
-        Accept: 'application/json'
-      },
-      cache: 'no-store'
-    });
-
-    if (!response.ok) {
-      console.warn(
-        '[pretix-ticket] Pretix API returned non-success status %s for event %s',
-        response.status,
-        eventSlug
-      );
-      return false;
-    }
-
-    const data = (await response.json()) as { count?: number; results?: unknown[] };
-    const orders = Array.isArray(data.results) ? (data.results as PretixOrder[]) : null;
-    const hasTicket =
-      orders !== null
-        ? orders.some((order) => evaluateOrderTicketState(order, email, requiredItemIds))
-        : typeof data.count === 'number'
-          ? data.count > 0
-          : false;
-
-    return hasTicket;
-  } catch (error) {
-    console.warn(
-      '[pretix-ticket] Pretix API request failed for event %s',
-      eventSlug,
-      error
+    const orders = await fetchPaidOrders(config, eventSlug, targetEmail);
+    return orders.some((order) =>
+      toOrderAttendees(order, requiredItemIds).some((attendee) => attendee.email === targetEmail)
     );
+  } catch (error) {
+    console.warn('[pretix-ticket] Pretix ticket check failed for event %s', eventSlug, error);
     return false;
   }
 };
@@ -304,48 +270,14 @@ export const getPretixAttendeesForEvent = async (eventSlug: UrlSlug): Promise<Pr
   }
 
   const attendeesByEmail = new Map<string, PretixAttendee>();
-  let nextUrl: string | undefined;
-  let pageCount = 0;
-
-  do {
-    const url = buildEventOrdersUrl(config, eventSlug, nextUrl);
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: `Token ${config.apiToken}`,
-        Accept: 'application/json'
-      },
-      cache: 'no-store'
-    });
-
-    if (!response.ok) {
-      throw new Error(`Pretix API returned ${response.status}`);
-    }
-
-    const data = (await response.json()) as {
-      results?: PretixOrder[];
-      next?: string | null;
-    };
-
-    for (const order of data.results ?? []) {
-      for (const attendee of toOrderAttendees(order, requiredItemIds)) {
-        const existing = attendeesByEmail.get(attendee.email);
-        if (!existing) {
-          attendeesByEmail.set(attendee.email, attendee);
-          continue;
-        }
-        if (!existing.name && attendee.name) {
-          attendeesByEmail.set(attendee.email, attendee);
-        }
+  for (const order of await fetchPaidOrders(config, eventSlug)) {
+    for (const attendee of toOrderAttendees(order, requiredItemIds)) {
+      const existing = attendeesByEmail.get(attendee.email);
+      if (!existing || (!existing.name && attendee.name)) {
+        attendeesByEmail.set(attendee.email, attendee);
       }
     }
-
-    nextUrl = data.next ?? undefined;
-    pageCount += 1;
-    if (pageCount > 200) {
-      throw new Error('Pretix pagination exceeded safety limit');
-    }
-  } while (nextUrl);
+  }
 
   return Array.from(attendeesByEmail.values());
 };

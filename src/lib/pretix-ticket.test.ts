@@ -42,7 +42,7 @@ describe('pretix-ticket', () => {
 
     const fetchSpy = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ count: 0 })
+      json: async () => ({ count: 0, results: [], next: null })
     });
     global.fetch = fetchSpy as unknown as typeof fetch;
 
@@ -72,7 +72,18 @@ describe('pretix-ticket', () => {
 
     const fetchSpy = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ count: 1 })
+      json: async () => ({
+        count: 1,
+        results: [
+          {
+            status: 'p',
+            testmode: false,
+            email: 'person@example.org',
+            positions: [{ canceled: false, attendee_email: 'person@example.org' }]
+          }
+        ],
+        next: null
+      })
     });
     global.fetch = fetchSpy as unknown as typeof fetch;
 
@@ -90,7 +101,7 @@ describe('pretix-ticket', () => {
 
     const fetchSpy = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ count: 0 })
+      json: async () => ({ count: 0, results: [], next: null })
     });
     global.fetch = fetchSpy as unknown as typeof fetch;
 
@@ -107,7 +118,18 @@ describe('pretix-ticket', () => {
 
     const fetchSpy = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ count: 1 })
+      json: async () => ({
+        count: 1,
+        results: [
+          {
+            status: 'p',
+            testmode: false,
+            email: 'person@example.org',
+            positions: [{ canceled: false, attendee_email: 'person@example.org' }]
+          }
+        ],
+        next: null
+      })
     });
     global.fetch = fetchSpy as unknown as typeof fetch;
 
@@ -350,5 +372,141 @@ describe('pretix-ticket', () => {
     const result = await getPretixAttendeesForEvent('my-event');
 
     expect(result).toEqual([{ email: 'keep@example.org', name: undefined }]);
+  });
+
+  describe('attendee vs purchaser email', () => {
+    beforeEach(() => {
+      process.env.PRETIX_REQUIRE_VALID_TICKET = 'true';
+      process.env.PRETIX_API_TOKEN = 'token';
+      process.env.PRETIX_ORGANIZER = 'org';
+      process.env.PRETIX_API_BASE_URL = 'https://tickets.example.org';
+      delete process.env.PRETIX_REQUIRED_ITEM_IDS;
+    });
+
+    const mockOrders = (...pages: unknown[][]) => {
+      const fetchSpy = jest.fn();
+      pages.forEach((results, i) =>
+        fetchSpy.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            results,
+            next: i < pages.length - 1 ? `https://tickets.example.org/next?page=${i + 2}` : null
+          })
+        })
+      );
+      global.fetch = fetchSpy as unknown as typeof fetch;
+      return fetchSpy;
+    };
+
+    it('searches by the checked email instead of filtering on purchaser email', async () => {
+      const fetchSpy = mockOrders([]);
+
+      await hasValidPretixTicketForEvent(' Person@Example.org ', 'my-event');
+
+      const url = new URL(fetchSpy.mock.calls[0][0].toString());
+      expect(url.searchParams.get('search')).toBe('person@example.org');
+      expect(url.searchParams.get('status')).toBe('p');
+      expect(url.searchParams.has('email__iexact')).toBe(false);
+      expect(url.searchParams.has('email')).toBe(false);
+    });
+
+    it('grants access to an attendee whose ticket someone else bought', async () => {
+      mockOrders([
+        {
+          status: 'p',
+          testmode: false,
+          email: 'buyer@example.org',
+          positions: [
+            { canceled: false, attendee_email: 'buyer@example.org' },
+            { canceled: false, attendee_email: 'Person@Example.org' }
+          ]
+        }
+      ]);
+
+      await expect(hasValidPretixTicketForEvent('person@example.org', 'my-event')).resolves.toBe(
+        true
+      );
+    });
+
+    it('denies a purchaser whose only ticket belongs to someone else', async () => {
+      mockOrders([
+        {
+          status: 'p',
+          testmode: false,
+          email: 'buyer@example.org',
+          positions: [{ canceled: false, attendee_email: 'person@example.org' }]
+        }
+      ]);
+
+      await expect(hasValidPretixTicketForEvent('buyer@example.org', 'my-event')).resolves.toBe(
+        false
+      );
+    });
+
+    it("treats a ticket with no attendee email as the purchaser's", async () => {
+      mockOrders([
+        {
+          status: 'p',
+          testmode: false,
+          email: 'buyer@example.org',
+          positions: [{ canceled: false, attendee_email: null }]
+        }
+      ]);
+
+      await expect(hasValidPretixTicketForEvent('buyer@example.org', 'my-event')).resolves.toBe(
+        true
+      );
+    });
+
+    it('ignores substring matches returned by the search', async () => {
+      mockOrders([
+        {
+          status: 'p',
+          testmode: false,
+          email: 'buyer@example.org',
+          positions: [{ canceled: false, attendee_email: 'notperson@example.org' }]
+        }
+      ]);
+
+      await expect(hasValidPretixTicketForEvent('person@example.org', 'my-event')).resolves.toBe(
+        false
+      );
+    });
+
+    it('checks orders on later pages', async () => {
+      const fetchSpy = mockOrders(
+        [
+          {
+            status: 'p',
+            testmode: false,
+            email: 'a@example.org',
+            positions: [{ canceled: false, attendee_email: 'a@example.org' }]
+          }
+        ],
+        [
+          {
+            status: 'p',
+            testmode: false,
+            email: 'buyer@example.org',
+            positions: [{ canceled: false, attendee_email: 'person@example.org' }]
+          }
+        ]
+      );
+
+      await expect(hasValidPretixTicketForEvent('person@example.org', 'my-event')).resolves.toBe(
+        true
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('fails closed when Pretix returns an error', async () => {
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: false, status: 500 }) as unknown as typeof fetch;
+
+      await expect(hasValidPretixTicketForEvent('person@example.org', 'my-event')).resolves.toBe(
+        false
+      );
+    });
   });
 });
