@@ -8,7 +8,7 @@
  * - description: string
  * - eventDay: smallint (day of event, e.g. 0 for first day)
  * - startTime: time (without timezone)
- * - durationHours: numeric(4,2) (quarter-hour increments)
+ * - durationHours: numeric(7,2) (quarter-hour increments)
  * - minVolunteers: smallint
  * - maxVolunteers: smallint
  * - isActive: boolean
