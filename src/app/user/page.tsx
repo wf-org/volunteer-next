@@ -13,12 +13,15 @@ import {
 } from '@/utils/path';
 import VolunteerList from '@/ui/volunteer-list';
 import { usersToVolunteers } from '@/lib/volunteer';
-import { Pencil1Icon, PlusIcon, Share2Icon } from '@radix-ui/react-icons';
+import { EnvelopeClosedIcon, Pencil1Icon, PlusIcon, Share2Icon } from '@radix-ui/react-icons';
 import DeleteButton from '@/ui/delete-button';
 import { recordToUserFilters } from '@/utils/user-filters';
 import { getPermissionsProfile } from '@/utils/permissions';
 import NextLink from 'next/link';
-import { getHoursForVolunteers } from '@/service/shift-service';
+import { getHoursForVolunteers, getShiftsForVolunteers } from '@/service/shift-service';
+import { getTeamsForEvent } from '@/service/team-service';
+import SendEmailButton from '@/ui/send-email-button';
+import { getNotifyVolunteersAction } from '@/lib/email';
 import ImportVolunteersButton from '@/ui/import-volunteers-button';
 import { getEvents } from '@/service/event-service';
 
@@ -51,6 +54,41 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
   if (canEdit) {
     withFilters.push('showDeleted');
   }
+
+  // Bulk email goes to the filtered list; only admins and organisers of the event may send it
+  const emailers: UserRoleMatchCriteria[] = [{ type: 'admin' }];
+  if (hoursEvent) {
+    emailers.push({ type: 'organiser', eventId: hoursEvent.id });
+  }
+  const canEmail = Boolean(hoursEvent) && (await checkAuthorisation(emailers, true));
+  const deletedUserIds = new Set(users.filter((u) => u.deletedAt).map((u) => u.id));
+  const emailableVolunteers = canEmail
+    ? volunteers.filter((v) => v.email && !deletedUserIds.has(v.id))
+    : [];
+
+  const handleNotify = async (customisation: EmailCustomisation): Promise<SendEmailResult> => {
+    'use server';
+    await checkAuthorisation(emailers);
+    if (!hoursEvent) {
+      return { status: 'failed', error: 'No event selected' };
+    }
+    const [shiftsByVolunteerId, teams] = customisation.includeShifts
+      ? await Promise.all([
+          getShiftsForVolunteers(
+            emailableVolunteers.map((v) => v.id),
+            { event: hoursEvent }
+          ),
+          getTeamsForEvent(hoursEvent.id)
+        ])
+      : [{}, []];
+    return getNotifyVolunteersAction({
+      volunteers: emailableVolunteers,
+      shiftsByVolunteerId,
+      event: hoursEvent,
+      teams,
+      acceptedRoles: emailers
+    })(customisation);
+  };
 
   const handleDeleteUser = async (userId: string) => {
     'use server';
@@ -187,6 +225,23 @@ export default async function UsersDashboardPage({ searchParams }: PageProps<'/u
             {t('export')}
           </NextLink>
         </Button>
+        {canEmail && hoursEvent && (
+          <SendEmailButton
+            variant="soft"
+            successMessage={t('emailSuccessMessage')}
+            successTitle={t('emailSuccessTitle')}
+            failureMessage={t('emailFailureMessage')}
+            failureTitle={t('emailFailureTitle')}
+            customisable
+            numEmails={emailableVolunteers.length}
+            emailContext={t('emailContext', { eventName: hoursEvent.name })}
+            sendEmail={handleNotify}
+            data-umami-event="Email filtered volunteers"
+          >
+            <EnvelopeClosedIcon />
+            {t('emailVolunteers')}
+          </SendEmailButton>
+        )}
       </Flex>
       <VolunteerList
         volunteers={volunteers}
