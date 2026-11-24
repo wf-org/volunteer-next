@@ -134,7 +134,45 @@ describe('validateNewShift', () => {
     });
 
     expect(() => validateNewShift(formData)).toThrow(
-      'Shift durationHours must be a positive number'
+      'Shift durationHours must be a positive multiple of 0.25'
+    );
+  });
+
+  it('accepts quarter-hour durationHours and volunteerHours', () => {
+    const formData = createFormData({
+      teamId: 'team-123',
+      title: 'Morning Shift',
+      'shift-day': '1',
+      'shift-time': '08:00',
+      durationHours: '1.5',
+      volunteerHours: '0.75',
+      minVolunteers: '2',
+      maxVolunteers: '5',
+      isActive: 'on',
+      requirements: []
+    });
+
+    const result = validateNewShift(formData);
+
+    expect(result.durationHours).toBe(1.5);
+    expect(result.volunteerHours).toBe(0.75);
+  });
+
+  it('throws an error if durationHours is not a quarter-hour increment', () => {
+    const formData = createFormData({
+      teamId: 'team-123',
+      title: 'Morning Shift',
+      'shift-day': '1',
+      'shift-time': '08:00',
+      durationHours: '1.3',
+      minVolunteers: '2',
+      maxVolunteers: '5',
+      isActive: 'on',
+      requirements: []
+    });
+
+    expect(() => validateNewShift(formData)).toThrow(
+      'Shift durationHours must be a positive multiple of 0.25'
     );
   });
 
@@ -153,7 +191,7 @@ describe('validateNewShift', () => {
     });
 
     expect(() => validateNewShift(formData)).toThrow(
-      'Shift volunteerHours must be a positive number when provided'
+      'Shift volunteerHours must be a positive multiple of 0.25 when provided'
     );
   });
 

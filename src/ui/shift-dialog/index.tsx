@@ -12,6 +12,7 @@ import { EventDaySelect, TimeSelect } from '@/ui/datepicker';
 import FormDialog, { FormField } from '@/ui/form-dialog';
 import { useEffect, useRef, useState } from 'react';
 import DeleteButton from '@/ui/delete-button';
+import { SHIFT_HOURS_STEP } from '@/validator/shift-validator';
 
 interface BaseProps {
   startDate: Date;
@@ -172,7 +173,8 @@ export default function ShiftDialog({
               aria-labelledby="shift-length"
               name="durationHours"
               type="number"
-              min={1}
+              min={SHIFT_HOURS_STEP}
+              step={SHIFT_HOURS_STEP}
               defaultValue={editing?.durationHours ?? 0}
               required
             />
@@ -186,7 +188,8 @@ export default function ShiftDialog({
               aria-labelledby="shift-volunteer-hours"
               name="volunteerHours"
               type="number"
-              min={1}
+              min={SHIFT_HOURS_STEP}
+              step={SHIFT_HOURS_STEP}
               placeholder={t('volunteerHoursPlaceholder')}
               defaultValue={editing?.volunteerHours ?? ''}
             />

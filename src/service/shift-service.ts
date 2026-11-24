@@ -8,7 +8,7 @@
  * - description: string
  * - eventDay: smallint (day of event, e.g. 0 for first day)
  * - startTime: time (without timezone)
- * - durationHours: smallint
+ * - durationHours: numeric(4,2) (quarter-hour increments)
  * - minVolunteers: smallint
  * - maxVolunteers: smallint
  * - isActive: boolean
@@ -38,7 +38,7 @@ const rowToShift = (row: any): ShiftInfo => ({
   description: row.description ?? '',
   eventDay: row.eventDay,
   startTime: stringToTime(row.startTime),
-  durationHours: row.durationHours,
+  durationHours: Number(row.durationHours),
   volunteerHours: row.volunteerHours === null ? undefined : Number(row.volunteerHours),
   minVolunteers: row.minVolunteers,
   maxVolunteers: row.maxVolunteers,
@@ -700,7 +700,7 @@ export const getHoursForVolunteers = cache(
     );
     const hours: Record<UserId, number> = {};
     for (const row of result.rows) {
-      hours[row.user_id] = parseInt(row.total_hours, 10);
+      hours[row.user_id] = Number(row.total_hours);
     }
     return hours;
   }

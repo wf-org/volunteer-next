@@ -6,6 +6,12 @@
 
 import { stringToTime } from '@/utils/datetime';
 
+/** Shift lengths and volunteer hours must be multiples of this many hours. */
+export const SHIFT_HOURS_STEP = 0.25;
+
+const isValidHours = (value: number): boolean =>
+  Number.isFinite(value) && value > 0 && Number.isInteger(value / SHIFT_HOURS_STEP);
+
 /**
  * Get a TeamId from FormData for a Shift
  * @param data - FormData for a Shift
@@ -64,15 +70,15 @@ export const validateNewShift = (data: FormData): Omit<ShiftInfo, 'id'> => {
   if (!durationHoursStr) {
     throw new Error('Shift durationHours is required');
   }
-  const durationHours = parseInt(durationHoursStr, 10);
-  if (isNaN(durationHours) || durationHours <= 0) {
-    throw new Error('Shift durationHours must be a positive number');
+  const durationHours = Number(durationHoursStr);
+  if (!isValidHours(durationHours)) {
+    throw new Error('Shift durationHours must be a positive multiple of 0.25');
   }
   const volunteerHoursStr = data.get('volunteerHours')?.toString().trim() ?? '';
   const volunteerHours =
-    volunteerHoursStr.length === 0 ? undefined : parseInt(volunteerHoursStr, 10);
-  if (volunteerHours !== undefined && (isNaN(volunteerHours) || volunteerHours <= 0)) {
-    throw new Error('Shift volunteerHours must be a positive number when provided');
+    volunteerHoursStr.length === 0 ? undefined : Number(volunteerHoursStr);
+  if (volunteerHours !== undefined && !isValidHours(volunteerHours)) {
+    throw new Error('Shift volunteerHours must be a positive multiple of 0.25 when provided');
   }
   const minVolunteersStr = data.get('minVolunteers')?.toString() ?? null;
   if (!minVolunteersStr) {

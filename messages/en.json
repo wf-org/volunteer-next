@@ -435,7 +435,7 @@
     "shiftTime": "Shift Start Time",
     "shiftTimeDescription": "Time when the shift starts",
     "length": "Length of Shift",
-    "lengthDescription": "Length of the shift in HOURS",
+    "lengthDescription": "Length of the shift in HOURS (quarter-hour increments, e.g. 1.5)",
     "minVolunteers": "Minimum Volunteers Needed",
     "minVolunteersDescription": "The minimum number of volunteers needed.",
     "maxVolunteers": "Maximum Volunteers Needed",

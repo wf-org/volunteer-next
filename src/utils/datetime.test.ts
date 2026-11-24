@@ -50,6 +50,12 @@ describe('datetime utilities', () => {
       expect(addHoursToTimeString('23:30', 2)).toBe('01:30');
       expect(addHoursToTimeString('00:15', 25)).toBe('01:15');
     });
+
+    it('should add partial hours to a time string', () => {
+      expect(addHoursToTimeString('12:00', 1.5)).toBe('13:30');
+      expect(addHoursToTimeString('23:45', 0.25)).toBe('00:00');
+      expect(addHoursToTimeString('08:10', 2.75)).toBe('10:55');
+    });
   });
 
   describe('eventDayTimeToDate', () => {
